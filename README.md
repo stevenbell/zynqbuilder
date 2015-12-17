@@ -23,6 +23,10 @@ There are four files necessary to boot from the SD card.  The Makefile includes 
 
     sh make_uboot.sh
 
+Then you can run
+
+    make
+    make SDCARD_DIR=/YOUR/SDCARD copy
 
 ## Boot image (boot.bin)
 The boot image contains three things:
@@ -44,15 +48,14 @@ This is required because it has an initramfs that chainloads to the SD card.
 
 ## Device tree (devicetree.dtb)
 The device tree is a system for informing the kernel what hardware exists on an embedded platform, and provides some other configuration details like boot parameters.
-
-You should be able
+This is "compiled" (or rather, compressed) into a "device tree blob" (DTB) from the source DTS file.
 
 ## Real root file system (ext4 partition on SD card)
 [Ubuntu core](https://wiki.ubuntu.com/Core) is pretty nice, because you have a normal-ish system with access to any software you might need.  However, the release itself is really minimal and takes a little work to set up.
 
-- Download the CD image for Ubuntu core for armhf: [http://cdimage.ubuntu.com/ubuntu-core/releases/15.04/release/]
+- Download the CD image for Ubuntu core for armhf: http://cdimage.ubuntu.com/ubuntu-core/releases/15.04/release/
 - Extract it to your SD card partition
-- Use chroot to create a new user and install ssh, following the directions here: [http://askubuntu.com/questions/216621/how-to-add-user-to-separate-filesystem-armel]
+- Use chroot to create a new user and install ssh, following the directions here: http://askubuntu.com/questions/216621/how-to-add-user-to-separate-filesystem-armel
 
     adduser ubuntu
     passwd ubuntu < set it to "ubuntu" >
