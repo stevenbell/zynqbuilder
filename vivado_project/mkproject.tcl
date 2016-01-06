@@ -7,7 +7,7 @@
 ################################################################
 # Check if script is running in correct Vivado version.
 ################################################################
-set scripts_vivado_version 2014.4
+set scripts_vivado_version 2015.4
 set current_vivado_version [version -short]
 
 if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
@@ -26,10 +26,11 @@ puts "  mkproject PROJECTNAME PATH IP_VLNV"
 puts "The VLNV is the IP identifier, in the form DOMAIN:LIBRARY:NAME:VERSION"
 puts "e.g., stanford.edu:demosaic:p_hls_target_hw_output_2_stencil_stream:1.0"
 
+# mkproject myProj work p_hls_target_hw_output_2_stencil_stream
 proc mkproject { projectName projectPath ip_vlnv} {
   # Repositories where additional IP cores live
-  set avnet_repo "/home/steven/work/camera_ifc/vita_hdmi_vivado/camera_dma_2014.4/avnet_fmc_imageon_cores"
-  set hls_repo "/home/steven/work/camera_ifc/ip_repo"
+  set avnet_repo "/home/jingpu/Halide-HLS/apps/hls_examples/stereo_hls/zynqbuilder/vivado_project/avnet_fmc_imageon_cores"
+  set hls_repo "/home/jingpu/Halide-HLS/apps/hls_examples/stereo_hls/hls_proj/solution1"
 
   puts "Creating project $projectName in $projectPath"
   puts "Using ip core directories:"
@@ -49,14 +50,14 @@ proc mkproject { projectName projectPath ip_vlnv} {
   set bd_path [create_bd_design $design_name]
   puts "block design path: $bd_path"
 
-  # Populate the block design 
+  # Populate the block design
   create_root_design "" $ip_vlnv
 
   # All done with the block diagram, close it now
   close_bd_design [get_bd_designs $design_name]
 
   # Add the constraints file and mark it as an XDC
-  set constrPath "/mnt/data/work/camera_ifc/vita_hdmi_vivado/camera_dma_2014.4/constraints/zc702_fmc_imageon_vita_passthrough.xdc"
+  set constrPath "/home/jingpu/Halide-HLS/apps/hls_examples/stereo_hls/zynqbuilder/vivado_project/zc702_fmc_imageon_vita_passthrough.xdc"
   set obj [get_filesets constrs_1]
   add_files -norecurse -fileset $obj $constrPath
   set file_obj [get_files -of_objects [get_filesets constrs_1] [list "*$constrPath"]]
@@ -64,9 +65,10 @@ proc mkproject { projectName projectPath ip_vlnv} {
 
   # Create the HDL wrapper for the design
   # TODO: get this filename from the create_bd_design command
-  make_wrapper -files [get_files /mnt/data/work/testproj/thename.srcs/sources_1/bd/thename_bd/thename_bd.bd] -top
+  set bd_path ${projectName}_bd
+  make_wrapper -files [get_files ${projectPath}/${projectName}.srcs/sources_1/bd/$bd_path/${bd_path}.bd] -top
 
-  add_files -norecurse /mnt/data/work/testproj/thename.srcs/sources_1/bd/thename_bd/hdl/thename_bd_wrapper.v
+  add_files -norecurse ${projectPath}/${projectName}.srcs/sources_1/bd/$bd_path/hdl/${bd_path}_wrapper.v
   update_compile_order -fileset sources_1
   update_compile_order -fileset sim_1
 }
@@ -131,7 +133,7 @@ proc create_hier_cell_fmc_imageon_vita_color { parentCell nameHier } {
   set onsemi_vita_spi_0 [ create_bd_cell -type ip -vlnv avnet:onsemi_vita:onsemi_vita_spi:3.1 onsemi_vita_spi_0 ]
 
   # Create instance: v_vid_in_axi4s_0, and set properties
-  set v_vid_in_axi4s_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:v_vid_in_axi4s:3.0 v_vid_in_axi4s_0 ]
+  set v_vid_in_axi4s_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:v_vid_in_axi4s:4.0 v_vid_in_axi4s_0 ]
   set_property -dict [ list CONFIG.C_M_AXIS_VIDEO_FORMAT {12}  ] $v_vid_in_axi4s_0
 
   # Create instance: vcc, and set properties
@@ -153,7 +155,7 @@ proc create_hier_cell_fmc_imageon_vita_color { parentCell nameHier } {
   connect_bd_net -net proc_sys_reset_peripheral_aresetn [get_bd_pins axi4lite_aresetn] [get_bd_pins onsemi_vita_cam_0/s00_axi_aresetn] [get_bd_pins onsemi_vita_spi_0/s00_axi_aresetn]
   connect_bd_net -net vcc_const [get_bd_pins onsemi_vita_cam_0/oe] [get_bd_pins onsemi_vita_spi_0/oe] [get_bd_pins v_vid_in_axi4s_0/aclken] [get_bd_pins v_vid_in_axi4s_0/aresetn] [get_bd_pins v_vid_in_axi4s_0/axis_enable] [get_bd_pins v_vid_in_axi4s_0/vid_io_in_ce] [get_bd_pins vcc/dout]
   connect_bd_net -net video_clk_div4 [get_bd_pins vita_clk] [get_bd_pins onsemi_vita_cam_0/clk] [get_bd_pins v_vid_in_axi4s_0/vid_io_in_clk]
-  
+
   # Restore current instance
   current_bd_instance $oldCurInst
 }
@@ -230,14 +232,19 @@ proc create_root_design { parentCell ip_vlnv } {
   create_hier_cell_fmc_imageon_vita_color [current_bd_instance .] fmc_imageon_vita_color
 
   # Create instance: ila_0, and set properties
-  set ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:5.0 ila_0 ]
+  set ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.0 ila_0 ]
   set_property -dict [ list CONFIG.C_DATA_DEPTH {16384} CONFIG.C_NUM_OF_PROBES {9} CONFIG.C_SLOT_0_AXI_PROTOCOL {AXI4S}  ] $ila_0
 
   # Create instance: interrupt_concat, and set properties
   set interrupt_concat [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 interrupt_concat ]
 
   # Create instance: accelerator, and set properties
-  set accelerator [ create_bd_cell -type ip -vlnv $ip_vlnv accelerator ]
+  set accelerator [ create_bd_cell -type ip -vlnv xilinx.com:hls:$ip_vlnv accelerator ]
+  # TODO expose the following variables to the scipt interface
+  set accelerator_axilite_name s_axi_axilite_hls_target_hw_output_2_stencil_stream
+  set accelerator_out_stream_name p_hw_output_2_stencil_stream
+  set accelerator_in0_stream_name p_interpolated_3_stencil_update_stream
+  set accelerator_in1_stream_name p_interpolated_4_stencil_update_stream
 
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
@@ -259,7 +266,7 @@ proc create_root_design { parentCell ip_vlnv } {
   connect_bd_intf_net -intf_net S00_AXI_2 [get_bd_intf_pins axi_dma_1/M_AXI_SG] [get_bd_intf_pins axi_mem_intercon_1/S00_AXI]
   connect_bd_intf_net -intf_net S01_AXI_1 [get_bd_intf_pins axi_dma_1/M_AXI_MM2S] [get_bd_intf_pins axi_mem_intercon_1/S01_AXI]
   connect_bd_intf_net -intf_net S02_AXI_1 [get_bd_intf_pins axi_dma_1/M_AXI_S2MM] [get_bd_intf_pins axi_mem_intercon_1/S02_AXI]
-  connect_bd_intf_net -intf_net axi_dma_1_M_AXIS_MM2S [get_bd_intf_pins axi_dma_1/M_AXIS_MM2S] [get_bd_intf_pins accelerator/p_constant_exterior_2_stencil_update_stream]
+  connect_bd_intf_net -intf_net axi_dma_1_M_AXIS_MM2S [get_bd_intf_pins axi_dma_1/M_AXIS_MM2S] [get_bd_intf_pins accelerator/$accelerator_in0_stream_name]
   connect_bd_intf_net -intf_net axi_mem_intercon_1_M00_AXI [get_bd_intf_pins axi_mem_intercon_1/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP1]
   connect_bd_intf_net -intf_net axi_mem_intercon_M00_AXI [get_bd_intf_pins axi_mem_intercon/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
   connect_bd_intf_net -intf_net fmc_imageon_iic_0_IIC [get_bd_intf_ports fmc_imageon_iic] [get_bd_intf_pins fmc_imageon_iic_0/IIC]
@@ -274,18 +281,18 @@ proc create_root_design { parentCell ip_vlnv } {
   connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M03_AXI [get_bd_intf_pins fmc_imageon_vita_color/cfa_ctrl] [get_bd_intf_pins processing_system7_0_axi_periph/M03_AXI]
   connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M04_AXI [get_bd_intf_pins fmc_imageon_vita_color/vita_cam_ctrl] [get_bd_intf_pins processing_system7_0_axi_periph/M04_AXI]
   connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M05_AXI [get_bd_intf_pins fmc_imageon_vita_color/vita_spi_ctrl] [get_bd_intf_pins processing_system7_0_axi_periph/M05_AXI]
-  connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M06_AXI [get_bd_intf_pins accelerator/s_axi_axilite_hls_target_hw_output_2_stencil_stream] [get_bd_intf_pins processing_system7_0_axi_periph/M06_AXI]
+  connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M06_AXI [get_bd_intf_pins accelerator/$accelerator_axilite_name] [get_bd_intf_pins processing_system7_0_axi_periph/M06_AXI]
 
   # Create port connections
   connect_bd_net -net axi4s_clk_1 [get_bd_pins axi_mem_intercon/ACLK] [get_bd_pins axi_mem_intercon/M00_ACLK] [get_bd_pins axi_mem_intercon/S00_ACLK] [get_bd_pins axi_vdma_0/m_axi_s2mm_aclk] [get_bd_pins axi_vdma_0/s_axis_s2mm_aclk] [get_bd_pins fmc_imageon_vita_color/axi4s_clk] [get_bd_pins proc_sys_reset_0/slowest_sync_clk] [get_bd_pins processing_system7_0/FCLK_CLK1] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK]
   connect_bd_net -net axi_dma_1_mm2s_introut [get_bd_pins axi_dma_1/mm2s_introut] [get_bd_pins interrupt_concat/In0]
   connect_bd_net -net axi_dma_1_s2mm_introut [get_bd_pins axi_dma_1/s2mm_introut] [get_bd_pins interrupt_concat/In1]
-  connect_bd_net -net axi_dma_1_s_axis_s2mm_tready [get_bd_pins axi_dma_1/s_axis_s2mm_tready] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TREADY]
+  connect_bd_net -net axi_dma_1_s_axis_s2mm_tready [get_bd_pins axi_dma_1/s_axis_s2mm_tready] [get_bd_pins accelerator/${accelerator_out_stream_name}_TREADY]
   connect_bd_net -net dout_padding_concat_dout [get_bd_pins axi_dma_1/s_axis_s2mm_tdata] [get_bd_pins dout_padding_concat/dout]
   connect_bd_net -net fmc_imageon_iic_0_gpo [get_bd_ports fmc_imageon_iic_rst_n] [get_bd_pins fmc_imageon_iic_0/gpo]
-  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TDATA [get_bd_pins dout_padding_concat/In0] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TDATA]
-  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TLAST [get_bd_pins axi_dma_1/s_axis_s2mm_tlast] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TLAST]
-  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TVALID [get_bd_pins axi_dma_1/s_axis_s2mm_tvalid] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TVALID]
+  connect_bd_net -net accelerator_${accelerator_out_stream_name}_TDATA [get_bd_pins dout_padding_concat/In0] [get_bd_pins accelerator/${accelerator_out_stream_name}_TDATA]
+  connect_bd_net -net accelerator_${accelerator_out_stream_name}_TLAST [get_bd_pins axi_dma_1/s_axis_s2mm_tlast] [get_bd_pins accelerator/${accelerator_out_stream_name}_TLAST]
+  connect_bd_net -net accelerator_${accelerator_out_stream_name}_TVALID [get_bd_pins axi_dma_1/s_axis_s2mm_tvalid] [get_bd_pins accelerator/${accelerator_out_stream_name}_TVALID]
   connect_bd_net -net proc_sys_reset_0_interconnect_aresetn [get_bd_pins axi_mem_intercon/ARESETN] [get_bd_pins proc_sys_reset_0/interconnect_aresetn]
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins axi_mem_intercon/M00_ARESETN] [get_bd_pins axi_mem_intercon/S00_ARESETN] [get_bd_pins proc_sys_reset_0/peripheral_aresetn]
   connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins axi_dma_1/m_axi_mm2s_aclk] [get_bd_pins axi_dma_1/m_axi_s2mm_aclk] [get_bd_pins axi_dma_1/m_axi_sg_aclk] [get_bd_pins axi_dma_1/s_axi_lite_aclk] [get_bd_pins axi_mem_intercon_1/ACLK] [get_bd_pins axi_mem_intercon_1/M00_ACLK] [get_bd_pins axi_mem_intercon_1/S00_ACLK] [get_bd_pins axi_mem_intercon_1/S01_ACLK] [get_bd_pins axi_mem_intercon_1/S02_ACLK] [get_bd_pins axi_vdma_0/s_axi_lite_aclk] [get_bd_pins fmc_imageon_iic_0/s_axi_aclk] [get_bd_pins fmc_imageon_vita_color/axi4lite_clk] [get_bd_pins ila_0/clk] [get_bd_pins accelerator/ap_clk] [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP1_ACLK] [get_bd_pins processing_system7_0_axi_periph/ACLK] [get_bd_pins processing_system7_0_axi_periph/M00_ACLK] [get_bd_pins processing_system7_0_axi_periph/M01_ACLK] [get_bd_pins processing_system7_0_axi_periph/M02_ACLK] [get_bd_pins processing_system7_0_axi_periph/M03_ACLK] [get_bd_pins processing_system7_0_axi_periph/M04_ACLK] [get_bd_pins processing_system7_0_axi_periph/M05_ACLK] [get_bd_pins processing_system7_0_axi_periph/M06_ACLK] [get_bd_pins processing_system7_0_axi_periph/S00_ACLK] [get_bd_pins rst_processing_system7_0_50M/slowest_sync_clk]
@@ -307,8 +314,7 @@ proc create_root_design { parentCell ip_vlnv } {
   create_bd_addr_seg -range 0x10000 -offset 0x41600000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fmc_imageon_iic_0/S_AXI/Reg] SEG_fmc_imageon_iic_0_Reg
   create_bd_addr_seg -range 0x10000 -offset 0x43C00000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fmc_imageon_vita_color/onsemi_vita_cam_0/S00_AXI/Reg] SEG_onsemi_vita_cam_0_Reg
   create_bd_addr_seg -range 0x10000 -offset 0x43C30000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fmc_imageon_vita_color/onsemi_vita_spi_0/S00_AXI/Reg] SEG_onsemi_vita_spi_0_Reg
-  create_bd_addr_seg -range 0x10000 -offset 0x43C10000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs accelerator/s_axi_axilite_hls_target_hw_output_2_stencil_stream/Reg] SEG_accelerator_Reg
-  
+  create_bd_addr_seg -range 0x10000 -offset 0x43C10000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs accelerator/${accelerator_axilite_name}/Reg] SEG_accelerator_Reg
 
   # Restore current instance
   current_bd_instance $oldCurInst
