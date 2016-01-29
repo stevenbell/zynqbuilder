@@ -34,8 +34,8 @@
 // kernel modules.  GPL may not be the right thing to put here.
 MODULE_LICENSE("GPL");
 
-#define CLASSNAME "vdma" // Shows up in /sys/class
-#define DEVNAME "pipe0" // Shows up in /dev
+#define CLASSNAME "hwacc" // Shows up in /sys/class
+#define DEVNAME "hwacc0" // Shows up in /dev
 
 // Memory mappings for the peripherals
 % for s in instreams:
@@ -124,7 +124,7 @@ void dma_finished_work(struct work_struct*);
 DECLARE_WORK(dma_launch_struct, dma_launch_work);
 DECLARE_WORK(dma_finished_struct, dma_finished_work);
 
-int debug_level = 0; // 0 is errors only, increasing numbers print more stuff
+int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
 
 #define ERROR(...) printk(__VA_ARGS__)
 #define DEBUG(...) if(debug_level > 0) printk(__VA_ARGS__)
@@ -212,10 +212,11 @@ static int dev_close(struct inode *inode, struct file *file)
  * Each image row is a new sg slice, and starts on a new memory location,
  * which may not be adjacent to the last one.
  */
-void build_sg_chain(const Buffer buf, unsigned long* sg_ptr, unsigned long* sg_phys)
+void build_sg_chain(const Buffer buf, unsigned long* sg_ptr_base, unsigned long* sg_phys)
 {
   int sg; // Descriptor count
-  TRACE("build_sg_chain: sg_ptr %lx\n", (unsigned long)sg_ptr);
+  unsigned long* sg_ptr = sg_ptr_base; // Pointer which will be incremented along the chain
+  TRACE("build_sg_chain: sg_ptr 0x%lx, sg_phys 0x%lx\n", (unsigned long)sg_ptr, (unsigned long)sg_phys);
 
   for(sg = 0; sg < buf.height; sg++){
     sg_ptr[0] = virt_to_phys(sg_ptr + SG_DESC_SIZE); // Pointer to next descriptor
@@ -238,7 +239,7 @@ void build_sg_chain(const Buffer buf, unsigned long* sg_ptr, unsigned long* sg_p
 
   // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
   // regardless of the data direction.
-  *sg_phys = dma_map_single(pipe_dev, sg_ptr, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
+  *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
 }
 
 
@@ -315,6 +316,8 @@ void dma_launch_work(struct work_struct* ws)
     TRACE("Writing DMA registers\n");
     // Kick off the DMA write operations
 % for s in streamNames:
+
+    TRACE("dma_launch_work: sg_phys 0x%lx\n", (unsigned long)buf->${s}_sg_phys);
     iowrite32(0x00010002, ${s}_dma_controller + 0x00); // Stop, so we can set the head ptr
     iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x08); // Pointer to the first descriptor
     iowrite32(0x00011003, ${s}_dma_controller + 0x00); // Run and enable interrupts
@@ -322,8 +325,7 @@ void dma_launch_work(struct work_struct* ws)
 % endfor
 
     // Start the stencil engine running
-    iowrite32(0x000000ff, acc_controller + 0x08);
-
+    iowrite32(0x000000ff, acc_controller + ${registers['run']});
     TRACE("dma_launch_work: Transfers started\n");
 
     // Move the buffer to the processing list
@@ -337,6 +339,8 @@ void dma_finished_work(struct work_struct* ws)
   TRACE("dma_finished_work");
 
   // Check that all of the output DMAs have completed their work
+  // TODO: bugs may lurk here if there are multiple outputs and the primary
+  // finishes first.
   while(${" && ".join(["atomic_read(&" + s + "_finished_count) > 0" for s in outstreams])}) {
 
     // Decrement the completion count
@@ -548,7 +552,7 @@ static int pipe_driver_init(void)
 {
   int irqok;
 % for s in streamNames:
-  irqok = request_irq(${s.upper()}_DMA_FINISHED_IRQ, dma_${s}_finished_handler, 0, DEVNAME, NULL);
+  irqok = request_irq(${s.upper()}_DMA_FINISHED_IRQ, dma_${s}_finished_handler, 0, "hwacc ${s}", NULL);
   if(irqok != 0){ return irqok; }
 % endfor
 
@@ -577,13 +581,13 @@ static int pipe_driver_init(void)
   acc_controller = ioremap(DPDA_CONTROLLER_BASE, DPDA_CONTROLLER_SIZE);
   if(${" || ".join([s + "_dma_controller == NULL" for s in streamNames])}
     || acc_controller == NULL){
-    ERROR("ioremap failed for one or more devices!");
+    ERROR("ioremap failed for one or more devices!\n");
     return(-ENODEV);
   }
 
 % for s in streamNames:
-  if(!check_dma_engine(${s}_dma_controller)){
-    ERROR("DMA engine ${s} is misconfigured or hung!");
+  if(check_dma_engine(${s}_dma_controller)){
+    ERROR("DMA engine ${s} is misconfigured or hung!\n");
     return(-ENODEV);
   }
 % endfor
