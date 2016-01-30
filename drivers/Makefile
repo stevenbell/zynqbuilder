@@ -1,15 +1,12 @@
-# Before running this, run the command-line
-# export CROSS_COMPILE=arm-xilinx-linux-gnueabi-
-
 ARCH := arm
-KER_DIR := /home/steven/work/linux-xlnx/
+KER_DIR := /cad/xilinx/linux-xlnx/
 
 obj-m := hwacc.o # Top level modules
 hwacc-objs := driver.o dma_bufferset.o buffer.o # Dependencies
 
 # Call the Linux source makefiles to do the dirty work
 all: driver.c
-	$(MAKE) ARCH=$(ARCH) -C $(KER_DIR) M=$(PWD) modules
+	$(MAKE) ARCH=$(ARCH) -C $(KER_DIR) M=$(PWD) CROSS_COMPILE=arm-xilinx-linux-gnueabi- modules
 
 install:
 	scp -i ~/.ssh/zynq_linaro hwacc.ko ubuntu@10.42.0.196:
