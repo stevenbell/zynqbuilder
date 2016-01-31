@@ -11,7 +11,7 @@ all: driver.c
 install:
 	scp -i ~/.ssh/zynq_linaro hwacc.ko ubuntu@10.42.0.196:
 
-clean: 
+clean:
 	make ARCH=$(ARCH) -C $(KER_DIR) M=$(PWD) clean
 
 cleanall:
