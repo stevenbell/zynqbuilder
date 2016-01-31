@@ -1,0 +1,10 @@
+*.cmd
+*.o
+*.ko
+
+# generated file by drivergen.py
+driver.c
+dma_bufferset.h
+
+# generated file during building module
+.tmp_versions/
