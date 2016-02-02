@@ -1,7 +1,7 @@
 # These parameters are defaults and should usually be overriden, e.g.,
 #   make SDCARD_DIR=/YOUR/PATH/HERE copy
 SDCARD_DIR=/media/steven/2E9F-3602
-PROJECT_DIR=/home/steven/work/testproj/
+PROJECT_DIR=/nobackup/jingpu/Halide-HLS/apps/hls_examples/stereo_hls/zynqbuilder/vivado_project/work
 
 # These are defaults which match the zynqbuilder vivado project.
 # You shouldn't have to change these.
@@ -54,7 +54,7 @@ fsbl.elf: ps7_init.c
 	$(MAKE) -C $(BUILD_DIR)/fsbl/Debug all
 
 ps7_init.c system.bit: $(SYSDEF)
-	rm -f $(EXPORT_DIR)/* # Just in case
+	rm -rf $(EXPORT_DIR)/* # Just in case
 	unzip -o $(SYSDEF) -d $(EXPORT_DIR)
 
 # TODO: depends on u-boot
