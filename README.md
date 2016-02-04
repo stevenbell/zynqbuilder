@@ -4,15 +4,13 @@ The base project assumes a ZC702 board with the Xilinx camera from the Zynq vide
 
 # Vivado project
 
-Edit the mkproject.tcl script to point to the IP repositories for the Avnet camera IP (included in this repository) and to your IP generated from HLS (or wherever).
-
 Open Vivado, and from the TCL console, run
 
     source mkproject.tcl -notrace
 
 Then run
 
-    mkproject PROJECTNAME PROJECTPATH IPVLNV
+    mkproject PROJECTNAME PROJECTPATH IP_PATH
 
 From here, you should be able to synthesize the design and create a bitstream.
 
