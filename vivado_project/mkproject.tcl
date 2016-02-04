@@ -3,6 +3,9 @@
 #
 # Steven Bell <sebell@stanford.edu>, based on generated script from Vivado
 # 11 December 2015
+# Artem Vasilyev <tema8@stanord.edu>, fixed paths to components, added
+# parsing of IP information
+#  2 February 2016
 
 ################################################################
 # Check if script is running in correct Vivado version.
@@ -22,16 +25,24 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 ################################################################
 
 puts "Script loaded.  Create a design using"
-puts "  mkproject PROJECTNAME PATH IP_VLNV"
-puts "The VLNV is the IP identifier, in the form DOMAIN:LIBRARY:NAME:VERSION"
-puts "e.g., stanford.edu:demosaic:p_hls_target_hw_output_2_stencil_stream:1.0"
+puts "  mkproject PROJECT_NAME PROJECT_PATH IP_PATH"
+variable myLocation [file dirname [file normalize [info script]]]
+set avnet_repo "${myLocation}/avnet_fmc_imageon_cores"
+set constrPath "${myLocation}/zc702_fmc_imageon_vita_passthrough.xdc"
+#Python script to extract info about IP component
+set get_ip_info "${myLocation}/get_component_info.py"
 
-proc mkproject { projectName projectPath ip_vlnv} {
+proc mkproject { projectName projectPath ip_path} {
   # Repositories where additional IP cores live
-  set avnet_repo "/home/steven/work/camera_ifc/vita_hdmi_vivado/camera_dma_2014.4/avnet_fmc_imageon_cores"
-  set hls_repo "/home/steven/work/camera_ifc/ip_repo"
+  global avnet_repo
+  global constrPath
+  global get_ip_info
+  #Get ablosute path to HLS
+  set hls_repo [file normalize $ip_path]
+  set ip_vlnv [exec python $get_ip_info $hls_repo "VLNV"]
 
   puts "Creating project $projectName in $projectPath"
+  puts "IP core VLNV: $ip_vlnv"
   puts "Using ip core directories:"
   puts "  $avnet_repo"
   puts "  $hls_repo"
@@ -46,27 +57,27 @@ proc mkproject { projectName projectPath ip_vlnv} {
 
   # Create an empty block design
   set design_name $projectName\_bd
-  set bd_path [create_bd_design $design_name]
-  puts "block design path: $bd_path"
+  set bd_name [create_bd_design $design_name]
+  set bd_path "${projectPath}/${projectName}.srcs/sources_1/bd/${bd_name}"
+  #puts "block design path: $bd_path"
 
   # Populate the block design 
-  create_root_design "" $ip_vlnv
+  create_root_design "" $ip_vlnv $hls_repo
 
   # All done with the block diagram, close it now
   close_bd_design [get_bd_designs $design_name]
 
   # Add the constraints file and mark it as an XDC
-  set constrPath "/mnt/data/work/camera_ifc/vita_hdmi_vivado/camera_dma_2014.4/constraints/zc702_fmc_imageon_vita_passthrough.xdc"
   set obj [get_filesets constrs_1]
   add_files -norecurse -fileset $obj $constrPath
   set file_obj [get_files -of_objects [get_filesets constrs_1] [list "*$constrPath"]]
   set_property "file_type" "XDC" $file_obj
 
   # Create the HDL wrapper for the design
-  # TODO: get this filename from the create_bd_design command
-  make_wrapper -files [get_files /mnt/data/work/testproj/thename.srcs/sources_1/bd/thename_bd/thename_bd.bd] -top
+  make_wrapper -files [get_files "${bd_path}/${design_name}.bd"] -top
 
-  add_files -norecurse /mnt/data/work/testproj/thename.srcs/sources_1/bd/thename_bd/hdl/thename_bd_wrapper.v
+  # Add newly created HDL wrapper as a source
+  add_files -norecurse "${bd_path}/hdl/${design_name}_wrapper.v"
   update_compile_order -fileset sources_1
   update_compile_order -fileset sim_1
 }
@@ -161,7 +172,7 @@ proc create_hier_cell_fmc_imageon_vita_color { parentCell nameHier } {
 
 # Procedure to create entire design; Provide argument to make
 # procedure reusable. If parentCell is "", will use root.
-proc create_root_design { parentCell ip_vlnv } {
+proc create_root_design { parentCell ip_vlnv ip_path} {
 
   if { $parentCell eq "" } {
      set parentCell [get_bd_cells /]
@@ -239,6 +250,14 @@ proc create_root_design { parentCell ip_vlnv } {
   # Create instance: accelerator, and set properties
   set accelerator [ create_bd_cell -type ip -vlnv $ip_vlnv accelerator ]
 
+  #Discover signal names in accelerator
+  global get_ip_info
+  set ip_clock [exec python $get_ip_info $ip_path "clock"]
+  set ip_reset [exec python $get_ip_info $ip_path "reset"]
+  set ip_aximm [exec python $get_ip_info $ip_path "aximm"]
+  set ip_axis_const  [exec python $get_ip_info $ip_path "axis_const"]
+  set ip_axis_output [exec python $get_ip_info $ip_path "axis_output"]
+
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
@@ -259,7 +278,7 @@ proc create_root_design { parentCell ip_vlnv } {
   connect_bd_intf_net -intf_net S00_AXI_2 [get_bd_intf_pins axi_dma_1/M_AXI_SG] [get_bd_intf_pins axi_mem_intercon_1/S00_AXI]
   connect_bd_intf_net -intf_net S01_AXI_1 [get_bd_intf_pins axi_dma_1/M_AXI_MM2S] [get_bd_intf_pins axi_mem_intercon_1/S01_AXI]
   connect_bd_intf_net -intf_net S02_AXI_1 [get_bd_intf_pins axi_dma_1/M_AXI_S2MM] [get_bd_intf_pins axi_mem_intercon_1/S02_AXI]
-  connect_bd_intf_net -intf_net axi_dma_1_M_AXIS_MM2S [get_bd_intf_pins axi_dma_1/M_AXIS_MM2S] [get_bd_intf_pins accelerator/p_constant_exterior_2_stencil_update_stream]
+  connect_bd_intf_net -intf_net axi_dma_1_M_AXIS_MM2S [get_bd_intf_pins axi_dma_1/M_AXIS_MM2S] [get_bd_intf_pins accelerator/$ip_axis_const]
   connect_bd_intf_net -intf_net axi_mem_intercon_1_M00_AXI [get_bd_intf_pins axi_mem_intercon_1/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP1]
   connect_bd_intf_net -intf_net axi_mem_intercon_M00_AXI [get_bd_intf_pins axi_mem_intercon/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
   connect_bd_intf_net -intf_net fmc_imageon_iic_0_IIC [get_bd_intf_ports fmc_imageon_iic] [get_bd_intf_pins fmc_imageon_iic_0/IIC]
@@ -274,25 +293,25 @@ proc create_root_design { parentCell ip_vlnv } {
   connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M03_AXI [get_bd_intf_pins fmc_imageon_vita_color/cfa_ctrl] [get_bd_intf_pins processing_system7_0_axi_periph/M03_AXI]
   connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M04_AXI [get_bd_intf_pins fmc_imageon_vita_color/vita_cam_ctrl] [get_bd_intf_pins processing_system7_0_axi_periph/M04_AXI]
   connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M05_AXI [get_bd_intf_pins fmc_imageon_vita_color/vita_spi_ctrl] [get_bd_intf_pins processing_system7_0_axi_periph/M05_AXI]
-  connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M06_AXI [get_bd_intf_pins accelerator/s_axi_axilite_hls_target_hw_output_2_stencil_stream] [get_bd_intf_pins processing_system7_0_axi_periph/M06_AXI]
+  connect_bd_intf_net -intf_net processing_system7_0_axi_periph_M06_AXI [get_bd_intf_pins accelerator/$ip_aximm] [get_bd_intf_pins processing_system7_0_axi_periph/M06_AXI]
 
   # Create port connections
   connect_bd_net -net axi4s_clk_1 [get_bd_pins axi_mem_intercon/ACLK] [get_bd_pins axi_mem_intercon/M00_ACLK] [get_bd_pins axi_mem_intercon/S00_ACLK] [get_bd_pins axi_vdma_0/m_axi_s2mm_aclk] [get_bd_pins axi_vdma_0/s_axis_s2mm_aclk] [get_bd_pins fmc_imageon_vita_color/axi4s_clk] [get_bd_pins proc_sys_reset_0/slowest_sync_clk] [get_bd_pins processing_system7_0/FCLK_CLK1] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK]
   connect_bd_net -net axi_dma_1_mm2s_introut [get_bd_pins axi_dma_1/mm2s_introut] [get_bd_pins interrupt_concat/In0]
   connect_bd_net -net axi_dma_1_s2mm_introut [get_bd_pins axi_dma_1/s2mm_introut] [get_bd_pins interrupt_concat/In1]
-  connect_bd_net -net axi_dma_1_s_axis_s2mm_tready [get_bd_pins axi_dma_1/s_axis_s2mm_tready] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TREADY]
+  connect_bd_net -net axi_dma_1_s_axis_s2mm_tready [get_bd_pins axi_dma_1/s_axis_s2mm_tready] [get_bd_pins accelerator/${ip_axis_output}_TREADY]
   connect_bd_net -net dout_padding_concat_dout [get_bd_pins axi_dma_1/s_axis_s2mm_tdata] [get_bd_pins dout_padding_concat/dout]
   connect_bd_net -net fmc_imageon_iic_0_gpo [get_bd_ports fmc_imageon_iic_rst_n] [get_bd_pins fmc_imageon_iic_0/gpo]
-  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TDATA [get_bd_pins dout_padding_concat/In0] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TDATA]
-  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TLAST [get_bd_pins axi_dma_1/s_axis_s2mm_tlast] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TLAST]
-  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TVALID [get_bd_pins axi_dma_1/s_axis_s2mm_tvalid] [get_bd_pins accelerator/p_hw_output_2_stencil_stream_TVALID]
+  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TDATA [get_bd_pins dout_padding_concat/In0] [get_bd_pins accelerator/${ip_axis_output}_TDATA]
+  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TLAST [get_bd_pins axi_dma_1/s_axis_s2mm_tlast] [get_bd_pins accelerator/${ip_axis_output}_TLAST]
+  connect_bd_net -net accelerator_p_hw_output_2_stencil_stream_TVALID [get_bd_pins axi_dma_1/s_axis_s2mm_tvalid] [get_bd_pins accelerator/${ip_axis_output}_TVALID]
   connect_bd_net -net proc_sys_reset_0_interconnect_aresetn [get_bd_pins axi_mem_intercon/ARESETN] [get_bd_pins proc_sys_reset_0/interconnect_aresetn]
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins axi_mem_intercon/M00_ARESETN] [get_bd_pins axi_mem_intercon/S00_ARESETN] [get_bd_pins proc_sys_reset_0/peripheral_aresetn]
-  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins axi_dma_1/m_axi_mm2s_aclk] [get_bd_pins axi_dma_1/m_axi_s2mm_aclk] [get_bd_pins axi_dma_1/m_axi_sg_aclk] [get_bd_pins axi_dma_1/s_axi_lite_aclk] [get_bd_pins axi_mem_intercon_1/ACLK] [get_bd_pins axi_mem_intercon_1/M00_ACLK] [get_bd_pins axi_mem_intercon_1/S00_ACLK] [get_bd_pins axi_mem_intercon_1/S01_ACLK] [get_bd_pins axi_mem_intercon_1/S02_ACLK] [get_bd_pins axi_vdma_0/s_axi_lite_aclk] [get_bd_pins fmc_imageon_iic_0/s_axi_aclk] [get_bd_pins fmc_imageon_vita_color/axi4lite_clk] [get_bd_pins ila_0/clk] [get_bd_pins accelerator/ap_clk] [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP1_ACLK] [get_bd_pins processing_system7_0_axi_periph/ACLK] [get_bd_pins processing_system7_0_axi_periph/M00_ACLK] [get_bd_pins processing_system7_0_axi_periph/M01_ACLK] [get_bd_pins processing_system7_0_axi_periph/M02_ACLK] [get_bd_pins processing_system7_0_axi_periph/M03_ACLK] [get_bd_pins processing_system7_0_axi_periph/M04_ACLK] [get_bd_pins processing_system7_0_axi_periph/M05_ACLK] [get_bd_pins processing_system7_0_axi_periph/M06_ACLK] [get_bd_pins processing_system7_0_axi_periph/S00_ACLK] [get_bd_pins rst_processing_system7_0_50M/slowest_sync_clk]
+  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins axi_dma_1/m_axi_mm2s_aclk] [get_bd_pins axi_dma_1/m_axi_s2mm_aclk] [get_bd_pins axi_dma_1/m_axi_sg_aclk] [get_bd_pins axi_dma_1/s_axi_lite_aclk] [get_bd_pins axi_mem_intercon_1/ACLK] [get_bd_pins axi_mem_intercon_1/M00_ACLK] [get_bd_pins axi_mem_intercon_1/S00_ACLK] [get_bd_pins axi_mem_intercon_1/S01_ACLK] [get_bd_pins axi_mem_intercon_1/S02_ACLK] [get_bd_pins axi_vdma_0/s_axi_lite_aclk] [get_bd_pins fmc_imageon_iic_0/s_axi_aclk] [get_bd_pins fmc_imageon_vita_color/axi4lite_clk] [get_bd_pins ila_0/clk] [get_bd_pins accelerator/${ip_clock}] [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP1_ACLK] [get_bd_pins processing_system7_0_axi_periph/ACLK] [get_bd_pins processing_system7_0_axi_periph/M00_ACLK] [get_bd_pins processing_system7_0_axi_periph/M01_ACLK] [get_bd_pins processing_system7_0_axi_periph/M02_ACLK] [get_bd_pins processing_system7_0_axi_periph/M03_ACLK] [get_bd_pins processing_system7_0_axi_periph/M04_ACLK] [get_bd_pins processing_system7_0_axi_periph/M05_ACLK] [get_bd_pins processing_system7_0_axi_periph/M06_ACLK] [get_bd_pins processing_system7_0_axi_periph/S00_ACLK] [get_bd_pins rst_processing_system7_0_50M/slowest_sync_clk]
   connect_bd_net -net processing_system7_0_FCLK_CLK2 [get_bd_pins fmc_imageon_vita_color/clk200] [get_bd_pins processing_system7_0/FCLK_CLK2]
   connect_bd_net -net processing_system7_0_FCLK_RESET0_N [get_bd_pins proc_sys_reset_0/ext_reset_in] [get_bd_pins processing_system7_0/FCLK_RESET0_N] [get_bd_pins rst_processing_system7_0_50M/ext_reset_in]
   connect_bd_net -net rst_processing_system7_0_50M_interconnect_aresetn [get_bd_pins processing_system7_0_axi_periph/ARESETN] [get_bd_pins rst_processing_system7_0_50M/interconnect_aresetn]
-  connect_bd_net -net rst_processing_system7_0_50M_peripheral_aresetn [get_bd_pins axi_dma_1/axi_resetn] [get_bd_pins axi_mem_intercon_1/ARESETN] [get_bd_pins axi_mem_intercon_1/M00_ARESETN] [get_bd_pins axi_mem_intercon_1/S00_ARESETN] [get_bd_pins axi_mem_intercon_1/S01_ARESETN] [get_bd_pins axi_mem_intercon_1/S02_ARESETN] [get_bd_pins fmc_imageon_iic_0/s_axi_aresetn] [get_bd_pins fmc_imageon_vita_color/axi4lite_aresetn] [get_bd_pins accelerator/ap_rst_n] [get_bd_pins processing_system7_0_axi_periph/M00_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M01_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M02_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M03_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M04_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M05_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M06_ARESETN] [get_bd_pins processing_system7_0_axi_periph/S00_ARESETN] [get_bd_pins rst_processing_system7_0_50M/peripheral_aresetn]
+  connect_bd_net -net rst_processing_system7_0_50M_peripheral_aresetn [get_bd_pins axi_dma_1/axi_resetn] [get_bd_pins axi_mem_intercon_1/ARESETN] [get_bd_pins axi_mem_intercon_1/M00_ARESETN] [get_bd_pins axi_mem_intercon_1/S00_ARESETN] [get_bd_pins axi_mem_intercon_1/S01_ARESETN] [get_bd_pins axi_mem_intercon_1/S02_ARESETN] [get_bd_pins fmc_imageon_iic_0/s_axi_aresetn] [get_bd_pins fmc_imageon_vita_color/axi4lite_aresetn] [get_bd_pins accelerator/${ip_reset}] [get_bd_pins processing_system7_0_axi_periph/M00_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M01_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M02_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M03_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M04_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M05_ARESETN] [get_bd_pins processing_system7_0_axi_periph/M06_ARESETN] [get_bd_pins processing_system7_0_axi_periph/S00_ARESETN] [get_bd_pins rst_processing_system7_0_50M/peripheral_aresetn]
   connect_bd_net -net vita_clk_1 [get_bd_ports vita_clk] [get_bd_pins fmc_imageon_vita_color/vita_clk]
   connect_bd_net -net xlconcat_0_dout [get_bd_pins interrupt_concat/dout] [get_bd_pins processing_system7_0/IRQ_F2P]
   connect_bd_net -net xlconstant_0_dout [get_bd_pins dout_padding/dout] [get_bd_pins dout_padding_concat/In1]
@@ -307,7 +326,7 @@ proc create_root_design { parentCell ip_vlnv } {
   create_bd_addr_seg -range 0x10000 -offset 0x41600000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fmc_imageon_iic_0/S_AXI/Reg] SEG_fmc_imageon_iic_0_Reg
   create_bd_addr_seg -range 0x10000 -offset 0x43C00000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fmc_imageon_vita_color/onsemi_vita_cam_0/S00_AXI/Reg] SEG_onsemi_vita_cam_0_Reg
   create_bd_addr_seg -range 0x10000 -offset 0x43C30000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fmc_imageon_vita_color/onsemi_vita_spi_0/S00_AXI/Reg] SEG_onsemi_vita_spi_0_Reg
-  create_bd_addr_seg -range 0x10000 -offset 0x43C10000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs accelerator/s_axi_axilite_hls_target_hw_output_2_stencil_stream/Reg] SEG_accelerator_Reg
+  create_bd_addr_seg -range 0x10000 -offset 0x43C10000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs accelerator/${ip_aximm}/Reg] SEG_accelerator_Reg
   
 
   # Restore current instance
