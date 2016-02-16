@@ -174,6 +174,7 @@ static int dev_open(struct inode *inode, struct file *file)
   // Allocate memory for the scatter-gather tables in the buffer set and put
   // them on the free list.  The actual data will be attached when needed.
   for(i = 0; i < N_DMA_BUFFERSETS; i++){
+    buffer_pool[i].id = i;
 % for s in streamNames:
     buffer_pool[i].${s}_sg = (unsigned long*) __get_free_pages(GFP_KERNEL, SG_PAGEORDER);
     if(buffer_pool[i].${s}_sg == NULL){
@@ -248,13 +249,14 @@ void build_sg_chain(const Buffer buf, unsigned long* sg_ptr_base, unsigned long*
  * and flushes the cache. Then it drops the BufferSet into the
  * queue to be pushed to the stencil path DMA engine as soon as it's free.
  */
-long process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
+int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 {
   BufferSet* src;
 
 % for s in instreams:
   if(${s}_b->width != ${instreams[s]['width']} || 
      ${s}_b->height != ${instreams[s]['height']}){
+    // TODO: also add depth
     ERROR("Buffer size for ${s} doesn't match hardware!");
   }
 % endfor
@@ -294,7 +296,7 @@ long process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
   queue_work(dma_launch_queue, &dma_launch_struct);
 
   TRACE("process_image: queued work\n");
-  return(0);
+  return(src->id);
 }
 
 
@@ -424,17 +426,21 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 /* Blocks until a result is complete, and removes the buffer set from the queue.
  * This should be called once for each process_image call.
  */
-void pend_processed(void)
+void pend_processed(int id)
 {
   BufferSet* resultSet;
 
-  TRACE("pend_processed: waiting for buffer");
+  TRACE("pend_processed: waiting for bufferset %d", id);
 
   // Block until a completed buffer becomes available
-  wait_event_interruptible(processing_finished, !buffer_listempty(&complete_list));
+  wait_event_interruptible(processing_finished, !buffer_hasid(&complete_list, id));
 
   // Remove the buffer
-  resultSet = buffer_dequeue(&complete_list);
+  resultSet = buffer_dequeueid(&complete_list, id);
+  if(resultSet == NULL){
+    ERROR("buffer_dequeue for id %d failed!", id);
+    return;
+  }
 
   // Put the buffer set back on the free list
   buffer_enqueue(&free_list, resultSet);
@@ -494,7 +500,7 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     case PEND_PROCESSED:
       TRACE("ioctl: PEND_PROCESSED\n");
-      pend_processed();
+      pend_processed(arg);
       break;
 
     case FREE_IMAGE:

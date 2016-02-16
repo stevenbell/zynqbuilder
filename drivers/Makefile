@@ -5,7 +5,7 @@ obj-m := hwacc.o # Top level modules
 hwacc-objs := driver.o dma_bufferset.o buffer.o # Dependencies
 
 # Call the Linux source makefiles to do the dirty work
-all: driver.c
+all: driver.c dma_bufferset.c dma_bufferset.h
 	$(MAKE) ARCH=$(ARCH) -C $(KER_DIR) M=$(PWD) CROSS_COMPILE=arm-xilinx-linux-gnueabi- modules
 
 install:
@@ -19,6 +19,9 @@ cleanall:
 	rm driver.c
 
 driver.c: driver.c.mako hwconfig.yml
+	python drivergen.py
+
+dma_bufferset.h: dma_bufferset.h.mako
 	python drivergen.py
 
 
