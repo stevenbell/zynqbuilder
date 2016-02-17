@@ -107,6 +107,7 @@ bool buffer_hasid(BufferList* list, int id)
 {
   bool found = false;
   BufferSet* s;
+
   while(down_interruptible(&(list->mutex)) != 0) {}
   for(s = list->head; s != NULL; s = s->next){
     if(s->id == id){

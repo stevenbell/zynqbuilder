@@ -387,7 +387,7 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 {
   iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
   wake_up_interruptible(&wq_${s});
-  DEBUG("DMA ${s} finished.");
+  DEBUG("irq: DMA ${s} finished.\n");
   return(IRQ_HANDLED);
 }
 % endfor
@@ -413,7 +413,7 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
   // Delegate the work of moving the buffer from "PROCESSING" to "FINISHED".
   // We can't do it here, since we're in an atomic context and trying to lock
   // access to the list could cause us to block.
-  DEBUG("Launching workqueue to complete processing");
+  DEBUG("irq: Launching workqueue to complete processing\n");
   // Launch a work queue task to write this to the DMA
   queue_work(dma_finished_queue, &dma_finished_struct);
 % endif
@@ -433,7 +433,7 @@ void pend_processed(int id)
   TRACE("pend_processed: waiting for bufferset %d", id);
 
   // Block until a completed buffer becomes available
-  wait_event_interruptible(processing_finished, !buffer_hasid(&complete_list, id));
+  wait_event_interruptible(processing_finished, buffer_hasid(&complete_list, id));
 
   // Remove the buffer
   resultSet = buffer_dequeueid(&complete_list, id);
@@ -463,7 +463,7 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   zero_buffer(&tmp_${s});
 % endfor
 
-  DEBUG("ioctl cmd %d\n", cmd);
+  DEBUG("ioctl cmd %d | %lu (%lx) \n", cmd, arg, arg);
   switch(cmd){
     case GET_BUFFER:
       TRACE("ioctl: GET_BUFFER\n");

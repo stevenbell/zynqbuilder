@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include "buffer.h"
 #include "ioctl_cmds.h"
@@ -78,9 +79,12 @@ int main(int argc, char* argv[])
   munmap((void*)data, bufs[1].stride * bufs[1].height * bufs[1].depth);
 
   // Run the processing operation
-  ioctl(hwacc, PROCESS_IMAGE, (long unsigned int)bufs);
-
-  ioctl(hwacc, PEND_PROCESSED, NULL);
+  int id = ioctl(hwacc, PROCESS_IMAGE, (long unsigned int)bufs);
+  int id2 = ioctl(hwacc, PROCESS_IMAGE, (long unsigned int)bufs);
+  //printf("Processing ID %d\n", id);
+  printf("Processing ID %d | %d\n", id, id2);
+  ioctl(hwacc, PEND_PROCESSED, id);
+  ioctl(hwacc, PEND_PROCESSED, id2);
 
   // Print out the result buffer
   data = (long*) mmap(NULL, bufs[2].stride * bufs[2].height * bufs[2].depth,
@@ -98,6 +102,11 @@ int main(int argc, char* argv[])
   }
   munmap((void*)data, bufs[2].stride * bufs[2].height * bufs[2].depth);
 
+  ok = ioctl(hwacc, FREE_IMAGE, (long unsigned int)bufs);
+  ok = ioctl(hwacc, FREE_IMAGE, (long unsigned int)(bufs + 1));
+  ok = ioctl(hwacc, FREE_IMAGE, (long unsigned int)(bufs + 2));
+
+  close(hwacc);
   return(0);
 }
 
