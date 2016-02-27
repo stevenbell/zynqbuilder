@@ -26,6 +26,7 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 
+#include "common.h"
 #include "buffer.h"
 #include "dma_bufferset.h"
 #include "ioctl_cmds.h"
@@ -126,10 +127,6 @@ DECLARE_WORK(dma_finished_struct, dma_finished_work);
 
 int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
 
-#define ERROR(...) printk(__VA_ARGS__)
-#define DEBUG(...) if(debug_level > 0) printk(__VA_ARGS__)
-#define TRACE(...) if(debug_level > 1) printk(__VA_ARGS__)
-
 /**
  * Probes the DMA engine to confirm that it exists at the assigned memory
  * location and that scatter-gather DMA is built-in.  The only reason
@@ -160,10 +157,6 @@ int check_dma_engine(unsigned char* dma_controller)
 static int dev_open(struct inode *inode, struct file *file)
 {
   int i;
-  // Set up the image buffers; fail if it fails.
-  if(init_buffers(pipe_dev) < 0){
-    return(-ENOMEM);
-  }
 
   // Set up the image buffer set
   buffer_initlist(&free_list);
@@ -196,7 +189,6 @@ static int dev_close(struct inode *inode, struct file *file)
   int i;
 
   // TODO: Wait until the DMA engine is done, so we don't write to memory after freeing it
-  cleanup_buffers(pipe_dev); // Release all the buffer memory
 
   for(i = 0; i < N_DMA_BUFFERSETS; i++){
 % for s in streamNames:
@@ -447,46 +439,16 @@ void pend_processed(int id)
   wake_up_interruptible(&buffer_free_queue);
 }
 
-void free_image(Buffer* buf)
-{
-  release_buffer(buf);
-  DEBUG("Releasing image\n");
-}
-
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-  Buffer tmp, *tmpptr;
   Buffer ${", ".join(["tmp_" + s for s in streamNames])};
 
-  zero_buffer(&tmp);
 % for s in streamNames:
   zero_buffer(&tmp_${s});
 % endfor
 
   DEBUG("ioctl cmd %d | %lu (%lx) \n", cmd, arg, arg);
   switch(cmd){
-    case GET_BUFFER:
-      TRACE("ioctl: GET_BUFFER\n");
-      // Get the desired buffer parameters from the object passed to us
-      if(access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer)) &&
-         (copy_from_user(&tmp, (void*)arg, sizeof(Buffer)) == 0)){
-        tmpptr = acquire_buffer(tmp.width, tmp.height, tmp.depth, tmp.stride);
-        if(tmpptr == NULL){
-          return(-ENOBUFS);
-        }
-      }
-      else{
-        return(-EIO);
-      }
-
-      // Now copy the retrieved buffer back to the user
-      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(Buffer)) && 
-         (copy_to_user((void*)arg, tmpptr, sizeof(Buffer)) == 0)) { } // All ok, nothing to do
-      else{
-        return(-EIO);
-      }
-    break;
-
     case PROCESS_IMAGE:
       TRACE("ioctl: PROCESS_IMAGE\n");
       if(access_ok(VERIFY_READ, (void*)arg, ${len(streamNames)}*sizeof(Buffer)) &&
@@ -503,46 +465,11 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       pend_processed(arg);
       break;
 
-    case FREE_IMAGE:
-      TRACE("ioctl: FREE_IMAGE\n");
-      // Copy the object into our tmp copy
-      if(access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer))){
-        copy_from_user(&tmp, (void*)arg, sizeof(Buffer));
-        free_image(&tmp);
-      }
-      else{
-        return(-EACCES);
-      }
-      break;
     default:
       return(-EINVAL); // Unknown command, return an error
       break;
   }
   return(0); // Success
-}
-
-int vma_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-  // Get the index of the page
-  // This is base_addr + offset
-  // TODO: do some error checking on the offset
-  vmf->page = virt_to_page(get_base_addr() + (vmf->pgoff << PAGE_SHIFT));
-  get_page(vmf->page);
-
-  //DEBUG("Page fault: %lu %x %x", vmf->pgoff, get_base_addr(), vmf->page);
-  return(0);
-}
-
-static struct vm_operations_struct vma_operations = {
-  .fault = vma_fault,
-};
-
-int dev_mmap(struct file *filp, struct vm_area_struct *vma)
-{
-  TRACE("dev_mmap\n");
-  // Just set up the operations; fault operation does all the hard work
-  vma->vm_ops = &vma_operations;
-  return 0;
 }
 
 
@@ -551,7 +478,6 @@ struct file_operations fops = {
   .open = dev_open,
   .release = dev_close,
   .unlocked_ioctl = dev_ioctl,
-  .mmap = dev_mmap,
 };
 
 static int pipe_driver_init(void)
