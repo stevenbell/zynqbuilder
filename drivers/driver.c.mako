@@ -50,6 +50,9 @@ MODULE_LICENSE("GPL");
 #define DPDA_CONTROLLER_BASE ${baseaddr}
 #define DPDA_CONTROLLER_SIZE ${regwidth}
 
+#define TIMER_CONTROLLER_BASE 0x42800000
+#define TIMER_CONTROLLER_SIZE 0x20
+
 // Interrupt numbers
 % for s in instreams:
 #define ${s.upper()}_DMA_FINISHED_IRQ ${instreams[s]['irq']}
@@ -61,16 +64,17 @@ MODULE_LICENSE("GPL");
 // Hardware address pointers from ioremap
 // We do byte-wise pointer arithmetic on these, so use uchar
 % for s in streamNames:
-unsigned char* ${s}_dma_controller; 
+unsigned char* ${s}_dma_controller;
 % endfor
 unsigned char* acc_controller;
+unsigned char* timer_controller;
 
 dev_t device_num;
 struct cdev *chardev;
 struct device *pipe_dev;
 struct class *pipe_class;
 
-#define N_DMA_BUFFERSETS 4 // Number of "buffer set" objects for passing through the queues
+#define N_DMA_BUFFERSETS 16 // Number of "buffer set" objects for passing through the queues
 BufferSet buffer_pool[N_DMA_BUFFERSETS];
 
 #define SG_DESC_SIZE 16 // Size of each SG descriptor, in 32-byte words
@@ -124,11 +128,42 @@ void dma_finished_work(struct work_struct*);
 DECLARE_WORK(dma_launch_struct, dma_launch_work);
 DECLARE_WORK(dma_finished_struct, dma_finished_work);
 
-int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
+const int debug_level = 0; // 0 is errors only, increasing numbers print more stuff
 
 #define ERROR(...) printk(__VA_ARGS__)
 #define DEBUG(...) if(debug_level > 0) printk(__VA_ARGS__)
 #define TRACE(...) if(debug_level > 1) printk(__VA_ARGS__)
+
+typedef struct {
+  unsigned long counter0;
+  unsigned long counter1;
+} timer_count_t;
+
+static inline void read_timer(timer_count_t *count) {
+  unsigned long cur_counter1;
+
+  /* (page 21 of PG079) The following are the steps for reading the 64-bit counter/timer:
+     1. Read the upper 32-bit timer/counter register (TCR1).
+     2. Read the lower 32-bit timer/counter register (TCR0).
+     3. Read the upper 32-bit timer/counter register (TCR1) again. If the value is different from
+     the 32-bit upper value read previously, go back to previous step (reading TCR0).
+     Otherwise 64-bit timer counter value is correct.
+  */
+  cur_counter1 = ioread32((void*)timer_controller + 0x18);
+  do {
+    count->counter1 = cur_counter1;
+    count->counter0 = ioread32((void*)timer_controller + 0x08);
+    cur_counter1 = ioread32((void*)timer_controller + 0x18);
+  } while (cur_counter1 != count->counter1);
+}
+
+static inline void debug_timer(void) {
+  timer_count_t count;
+  if(debug_level > 0) {
+    read_timer(&count);
+    DEBUG("debug_timer: %lu, %lu\n", count.counter1, count.counter0);
+  }
+}
 
 /**
  * Probes the DMA engine to confirm that it exists at the assigned memory
@@ -243,6 +278,41 @@ void build_sg_chain(const Buffer buf, unsigned long* sg_ptr_base, unsigned long*
   *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
 }
 
+// Use 2-D transfer feature in Xilinx AXI DMA.
+// To enable this feature, DMA IP needs to be configured with Multichannel mode enabled.
+// With this feature, a transfer of a sub-block of 2-D data requires only one descriptor.
+void build_sg_chain_2D(const Buffer buf, unsigned long* sg_ptr_base, unsigned long* sg_phys)
+{
+  unsigned long* sg_ptr = sg_ptr_base; // Pointer which will be incremented along the chain
+  TRACE("build_sg_chain: sg_ptr 0x%lx, sg_phys 0x%lx\n", (unsigned long)sg_ptr, (unsigned long)sg_phys);
+
+  // the sg chain only has one descriptor
+  sg_ptr[0] = virt_to_phys(sg_ptr + SG_DESC_SIZE); // Pointer to next descriptor
+  sg_ptr[1] = 0; // Upper 32 bits of descriptor pointer (unused)
+  sg_ptr[2] = buf.phys_addr; // Address where the data lives
+  sg_ptr[3] = 0; // Upper 32 bits of data address (unused)
+
+  // 0x10: AxUSER|AWCACHE|Rsvd|TUSER|Rsvd|TID|Rsvd|TDEST
+  sg_ptr[4] = 0x03000000; // default values for AxCACHE (0011) and AxUSER (0000)
+
+  // 0x14: VSIZE|Rsvd|Stride
+  sg_ptr[5] = buf.stride * buf.depth;  // Stride of the 2D block
+  sg_ptr[5] |= (buf.height << 19);     // VSize, i.e. the height of the block
+
+  // 0x18: SOP|EOP|Rsvd|HSIZE
+  sg_ptr[6] = (buf.width * buf.depth); // Width of data is width*depth of image
+  sg_ptr[6] |= 0x08000000; // Start of frame flag
+  sg_ptr[6] |= 0x04000000; // End of frame flag
+
+  sg_ptr[7] = 0; // Clear the status; the DMA engine will set this
+
+  TRACE("build_sg_chain: built SG table\n");
+
+  // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
+  // regardless of the data direction.
+  //*sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * 1, DMA_TO_DEVICE);
+  *sg_phys = virt_to_phys(sg_ptr_base);
+}
 
 /* Sets up a buffer for processing through the stencil path.  This drops the
  * image buffers into a BufferSet object, builds the scatter-gather tables,
@@ -273,19 +343,20 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 
   // Set up the scatter-gather descriptor chains
 % for s in streamNames:
-  build_sg_chain(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
+  //build_sg_chain(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
+  build_sg_chain_2D(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
 % endfor
 
   // Map the buffers for DMA
   // This causes cache flushes for the source buffer(s)
   // The invalidate for the result happens on the unmap
 % for s in instreams:
-  dma_map_single(pipe_dev, src->${s}.kern_addr,
-                 src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_TO_DEVICE);
+  //dma_map_single(pipe_dev, src->${s}.kern_addr,
+  //               src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_TO_DEVICE);
 % endfor
 % for s in outstreams:
-  dma_map_single(pipe_dev, src->${s}.kern_addr,
-                 src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
+  //dma_map_single(pipe_dev, src->${s}.kern_addr,
+  //               src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
 % endfor
 
   // Now throw this whole thing into the queue.
@@ -303,10 +374,10 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 void dma_launch_work(struct work_struct* ws)
 {
   BufferSet* buf;
-  TRACE("dma_launch_work");
+  TRACE("dma_launch_work: \n");
   while(!buffer_listempty(&queued_list)){
     buf = buffer_dequeue(&queued_list);
-    
+
     // Sleep until all the DMA engines are idle or halted (bits 0 and 1)
     // Write should always be idle first, but do all of them to be safe
 % for s in streamNames:
@@ -315,7 +386,7 @@ void dma_launch_work(struct work_struct* ws)
 
     // TODO: set taps, LUTs, etc
 
-    TRACE("Writing DMA registers\n");
+    TRACE("dma_launch_work: writing DMA registers\n");
     // Kick off the DMA write operations
 % for s in streamNames:
 
@@ -323,7 +394,8 @@ void dma_launch_work(struct work_struct* ws)
     iowrite32(0x00010002, ${s}_dma_controller + 0x00); // Stop, so we can set the head ptr
     iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x08); // Pointer to the first descriptor
     iowrite32(0x00011003, ${s}_dma_controller + 0x00); // Run and enable interrupts
-    iowrite32(buf->${s}_sg_phys + (buf->${s}.height - 1) * SG_DESC_BYTES, ${s}_dma_controller + 0x10); // Last descriptor, starts transfer
+    //iowrite32(buf->${s}_sg_phys + (buf->${s}.height - 1) * SG_DESC_BYTES, ${s}_dma_controller + 0x10); // Last descriptor, starts transfer
+    iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x10); // 2D mode: Last descriptor, starts transfer
 % endfor
 
     // Start the stencil engine running
@@ -333,12 +405,13 @@ void dma_launch_work(struct work_struct* ws)
     // Move the buffer to the processing list
     buffer_enqueue(&processing_list, buf);
   } // END while(buffers in QUEUED list)
+  debug_timer();
 }
 
 void dma_finished_work(struct work_struct* ws)
 {
   BufferSet* buf;
-  TRACE("dma_finished_work");
+  TRACE("dma_finished_work: \n");
 
   // Check that all of the output DMAs have completed their work
   // TODO: bugs may lurk here if there are multiple outputs and the primary
@@ -357,19 +430,19 @@ void dma_finished_work(struct work_struct* ws)
 
     // Unmap each of the SG buffers
 % for s in streamNames:
-    dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
+    //    dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
 % endfor
 
     // Unmap all the input and output buffers (with appropriate direction)
     // For the source buffers, this should do nothing.  For the result buffers,
     // it should cause a cache invalidate.
 % for s in instreams:
-    dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-                 buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
+    //    dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
+    //                buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
 % endfor
 % for s in outstreams:
-    dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-                 buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
+    //    dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
+    //             buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
 % endfor
 
     buffer_enqueue(&complete_list, buf);
@@ -401,7 +474,8 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 { 
   iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
   wake_up_interruptible(&wq_${s}); // The next processing action can now start
-  DEBUG("DMA ${s} finished.");
+  DEBUG("irq: DMA ${s} finished.\n");
+  debug_timer();
 
   // Keep an explicit count of the number of buffers, to cover the rare
   // (hopefully impossible) case where a second buffer finished before the work
@@ -430,10 +504,20 @@ void pend_processed(int id)
 {
   BufferSet* resultSet;
 
-  TRACE("pend_processed: waiting for bufferset %d", id);
+  TRACE("pend_processed: waiting for bufferset %d\n", id);
+  debug_timer();
+
+  /*
+  // polls IDLE bit of the output DMA
+  do {
+    status = ioread32((void*)output_dma_controller + 0x04);
+  } while((status & 0x2) == 0);
+  TRACE("pend_processed: output dma idle.");
+  */
 
   // Block until a completed buffer becomes available
   wait_event_interruptible(processing_finished, buffer_hasid(&complete_list, id));
+  debug_timer();
 
   // Remove the buffer
   resultSet = buffer_dequeueid(&complete_list, id);
@@ -455,6 +539,7 @@ void free_image(Buffer* buf)
 
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
+  timer_count_t timer_count;
   Buffer tmp, *tmpptr;
   Buffer ${", ".join(["tmp_" + s for s in streamNames])};
 
@@ -480,7 +565,7 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
 
       // Now copy the retrieved buffer back to the user
-      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(Buffer)) && 
+      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(Buffer)) &&
          (copy_to_user((void*)arg, tmpptr, sizeof(Buffer)) == 0)) { } // All ok, nothing to do
       else{
         return(-EIO);
@@ -512,6 +597,16 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
       else{
         return(-EACCES);
+      }
+      break;
+    case READ_TIMER:
+      TRACE("ioctl: READ_TIMER\n");
+      read_timer(&timer_count);
+      // Now copy the retrieved buffer back to the user
+      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(timer_count_t)) &&
+         (copy_to_user((void*)arg, &timer_count, sizeof(timer_count_t)) == 0)) { } // All ok, nothing to do
+      else{
+        return(-EIO);
       }
       break;
     default:
@@ -585,8 +680,9 @@ static int pipe_driver_init(void)
 % endfor
 
   acc_controller = ioremap(DPDA_CONTROLLER_BASE, DPDA_CONTROLLER_SIZE);
+  timer_controller = ioremap(TIMER_CONTROLLER_BASE, TIMER_CONTROLLER_SIZE);
   if(${" || ".join([s + "_dma_controller == NULL" for s in streamNames])}
-    || acc_controller == NULL){
+    || acc_controller == NULL || timer_controller == NULL){
     ERROR("ioremap failed for one or more devices!\n");
     return(-ENODEV);
   }
@@ -604,6 +700,10 @@ static int pipe_driver_init(void)
   cdev_add(chardev, device_num, 1);
 
   DEBUG("Driver initialized\n");
+
+  iowrite32(0x00000891, timer_controller);  // set cascade mode (64bit mode), capture mode, and auto load, and enable timer
+  DEBUG("TIMER started\n");
+  debug_timer();
   return(0);
 }
 
@@ -624,6 +724,7 @@ static void pipe_driver_exit(void)
   iounmap(${s}_dma_controller);
 % endfor
   iounmap(acc_controller);
+  iounmap(timer_controller);
 }
 
 module_init(pipe_driver_init);

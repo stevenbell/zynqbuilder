@@ -17,7 +17,7 @@
 // Asking for smaller images just returns a whole large buffer, and asking
 // for a larger image fails.  A better solution would be to use a buddy
 // allocator and give out pieces that are only as large as necessary.
-#define N_BUFFERS 6
+#define N_BUFFERS 16
 #define BUFFER_SIZE (2048*1080*4) // This number must be a multiple of 4k pages so mmap works
 
 unsigned char free_flag[N_BUFFERS];

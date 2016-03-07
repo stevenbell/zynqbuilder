@@ -7,6 +7,7 @@
 #define FREE_IMAGE 1002 // Release buffer
 #define PROCESS_IMAGE 1003 // Push to stencil path
 #define PEND_PROCESSED 1004 // Retreive from stencil path
+#define READ_TIMER 1010 // Retreive hw timer count
 
 // TODO: set width, height?
 
