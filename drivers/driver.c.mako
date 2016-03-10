@@ -25,6 +25,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
+#include <linux/of_platform.h>
 
 #include "common.h"
 #include "buffer.h"
@@ -50,14 +51,6 @@ MODULE_LICENSE("GPL");
 
 #define DPDA_CONTROLLER_BASE ${baseaddr}
 #define DPDA_CONTROLLER_SIZE ${regwidth}
-
-// Interrupt numbers
-% for s in instreams:
-#define ${s.upper()}_DMA_FINISHED_IRQ ${instreams[s]['irq']}
-% endfor
-% for s in outstreams:
-#define ${s.upper()}_DMA_FINISHED_IRQ ${outstreams[s]['irq']}
-% endfor
 
 // Hardware address pointers from ioremap
 // We do byte-wise pointer arithmetic on these, so use uchar
@@ -422,7 +415,7 @@ void pend_processed(int id)
 {
   BufferSet* resultSet;
 
-  TRACE("pend_processed: waiting for bufferset %d", id);
+  TRACE("pend_processed: waiting for bufferset %d\n", id);
 
   // Block until a completed buffer becomes available
   wait_event_interruptible(processing_finished, buffer_hasid(&complete_list, id));
@@ -430,7 +423,7 @@ void pend_processed(int id)
   // Remove the buffer
   resultSet = buffer_dequeueid(&complete_list, id);
   if(resultSet == NULL){
-    ERROR("buffer_dequeue for id %d failed!", id);
+    ERROR("buffer_dequeue for id %d failed!\n", id);
     return;
   }
 
@@ -480,11 +473,20 @@ struct file_operations fops = {
   .unlocked_ioctl = dev_ioctl,
 };
 
-static int pipe_driver_init(void)
+static int hwacc_probe(struct platform_device *pdev)
 {
   int irqok;
-% for s in streamNames:
-  irqok = request_irq(${s.upper()}_DMA_FINISHED_IRQ, dma_${s}_finished_handler, 0, "hwacc ${s}", NULL);
+  struct resource* r_irq = NULL;
+
+  // TODO: this is pretty fragile, as it relies on the ordering in the device
+  // tree.  It might be better to break them out in the device tree.
+% for n in range(len(streamNames)):
+  r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, ${n});
+  if(r_irq == NULL){
+    ERROR("IRQ lookup failed.  Check the device tree.\n");
+  }
+  TRACE("IRQ number is %d\n", r_irq->start);
+  irqok = request_irq(r_irq->start, dma_${streamNames[n]}_finished_handler, 0, "hwacc ${streamNames[n]}", NULL);
   if(irqok != 0){ return irqok; }
 % endfor
 
@@ -533,11 +535,17 @@ static int pipe_driver_init(void)
   return(0);
 }
 
-static void pipe_driver_exit(void)
+static int hwacc_remove(struct platform_device *pdev)
 {
+  struct resource* r_irq = NULL;
+
   // Release the IRQ lines
-% for s in streamNames:
-  free_irq(${s.upper()}_DMA_FINISHED_IRQ, NULL);
+% for n in range(len(streamNames)):
+  r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, ${n});
+  if(r_irq == NULL){
+    ERROR("IRQ lookup failed on release.  Check the device tree.\n");
+  }
+  free_irq(r_irq->start, NULL);
 % endfor
 
   device_unregister(pipe_dev);
@@ -550,8 +558,22 @@ static void pipe_driver_exit(void)
   iounmap(${s}_dma_controller);
 % endfor
   iounmap(acc_controller);
+  return(0);
 }
 
-module_init(pipe_driver_init);
-module_exit(pipe_driver_exit);
+static struct of_device_id hwacc_of_match[] = {
+  { .compatible = "hwacc", },
+  {}
+};
+
+static struct platform_driver hwacc_driver = {
+	.driver = {
+		.name = "hwacc",
+		.of_match_table = hwacc_of_match,
+	},
+	.probe = hwacc_probe,
+	.remove = hwacc_remove,
+};
+
+module_platform_driver(hwacc_driver)
 

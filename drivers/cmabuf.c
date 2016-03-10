@@ -19,7 +19,7 @@ struct cdev *chardev;
 struct device *cmabuf_dev;
 struct class *cmabuf_class;
 
-const int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
+const int debug_level = 4; // 0 is errors only, increasing numbers print more stuff
 
 static int dev_open(struct inode *inode, struct file *file)
 {
@@ -34,7 +34,7 @@ static int dev_open(struct inode *inode, struct file *file)
 
 static int dev_close(struct inode *inode, struct file *file)
 {
-  TRACE("cmabuffer: dev_close");
+  TRACE("cmabuffer: dev_close\n");
   cleanup_buffers(cmabuf_dev); // Release all the buffer memory
 
   return(0);
