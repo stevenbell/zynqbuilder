@@ -43,6 +43,7 @@ binary: $(BIN_DIR)/uImage $(BIN_DIR)/uramdisk.image.gz
 # Builds the device tree blob from source and puts it in the staging directory
 devicetree.dtb:
 	mkdir -p $(STAGING_DIR)
+	cd devicetree; python dtgen.py
 	dtc -I dts -O dtb -o $(STAGING_DIR)/devicetree.dtb devicetree/devicetree.dts
 
 # Builds the first-stage bootloader from source, using the Xilinx project

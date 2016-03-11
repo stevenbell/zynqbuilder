@@ -4,22 +4,25 @@ The base project assumes a ZC702 board with the Xilinx camera from the Zynq vide
 
 # Vivado project
 
-Edit the mkproject.tcl script to point to the IP repositories for the Avnet camera IP (included in this repository) and to your IP generated from HLS (or wherever).
-
 Open Vivado, and from the TCL console, run
 
     source mkproject.tcl -notrace
 
 Then run
 
-    mkproject PROJECTNAME PROJECTPATH IPVLNV
+    mkproject PROJECTNAME PROJECTPATH IP_PATH
 
 From here, you should be able to synthesize the design and create a bitstream.
 
 # SD card image
 The SD card should have two partitions; one FAT32 about 100MB, and one ext4 partition taking up the rest of the card.  The FAT partition contains the boot files, and the ext4 partition contains the filesystem.  The system starts with a tiny filesystem in a ramdisk, and switches over once it's partly booted.
 
-There are four files necessary to boot from the SD card.  The Makefile includes commands to generate all of these.  If the xilinx tools are in your path, you should be able to run
+There are four files necessary to boot from the SD card.  The Makefile includes commands to generate all of these.  You need in your path:
+
+  - Xilinx tools (compiler, bootgen)
+  - device-tree-compiler package (dtc)
+
+If these are in your path, you should be able to run
 
     sh make_uboot.sh
 

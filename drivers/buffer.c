@@ -11,19 +11,22 @@
 #include <linux/dma-mapping.h>
 #include <linux/string.h>
 
+#include "common.h"
 #include "buffer.h"
+
+extern const int debug_level; // This is defined in the including driver
 
 // For now, the implementation assumes a fixed number of large buffers.
 // Asking for smaller images just returns a whole large buffer, and asking
 // for a larger image fails.  A better solution would be to use a buddy
 // allocator and give out pieces that are only as large as necessary.
-#define N_BUFFERS 6
+#define N_BUFFERS 10
 #define BUFFER_SIZE (2048*1080*4) // This number must be a multiple of 4k pages so mmap works
 
 unsigned char free_flag[N_BUFFERS];
 Buffer buffers[N_BUFFERS];
 unsigned long base_phys_addr; // Physical base address of buffer
-void* base_kern_addr; // Kernel virtual base address of buffer
+void* base_kern_addr = NULL; // Kernel virtual base address of buffer
 
 int init_buffers(struct device* dev)
 {
@@ -64,6 +67,7 @@ void cleanup_buffers(struct device* dev)
 {
   dma_free_coherent(dev, N_BUFFERS*BUFFER_SIZE, base_kern_addr, base_phys_addr);
   printk("Freed CMA memory\n");
+  base_kern_addr = NULL;
 
 /*
   int i;
@@ -81,11 +85,15 @@ void* get_base_addr(void)
 /* depth is in bytes
  * stride is in pixels (i.e., multiply by depth to get stride in bytes)
  */
+// TODO: mutex access to the free flag
 Buffer* acquire_buffer(unsigned int width, unsigned int height, unsigned int depth, unsigned int stride)
 {
   int i = 0;
-//int j = 0;
-//unsigned long* data;
+
+  if(base_kern_addr == NULL){
+    WARNING("Device not yet opened; can't acquire buffer\n");
+    return NULL;
+  }
 
   if(width > stride){
     printk("acquire_buffer failed: width (%d) must be <= to stride (%d)\n", width, stride);
@@ -100,7 +108,7 @@ Buffer* acquire_buffer(unsigned int width, unsigned int height, unsigned int dep
   while(i < N_BUFFERS && free_flag[i] == 0){
 //printk("acquire_bufffer: %d is already taken, counting to %d\n", i, N_BUFFERS);
 i++;
- }
+  }
   if(i < N_BUFFERS){
     free_flag[i] = 0; // Mark as used
 
@@ -138,4 +146,7 @@ void release_buffer(Buffer* buf)
   free_flag[buf->id] = 1; // Mark as free
   // Trust the user to quit using the pointer
 }
+
+EXPORT_SYMBOL(acquire_buffer);
+EXPORT_SYMBOL(release_buffer);
 

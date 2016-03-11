@@ -25,7 +25,9 @@
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
+#include <linux/of_platform.h>
 
+#include "common.h"
 #include "buffer.h"
 #include "dma_bufferset.h"
 #include "ioctl_cmds.h"
@@ -49,14 +51,6 @@ MODULE_LICENSE("GPL");
 
 #define DPDA_CONTROLLER_BASE ${baseaddr}
 #define DPDA_CONTROLLER_SIZE ${regwidth}
-
-// Interrupt numbers
-% for s in instreams:
-#define ${s.upper()}_DMA_FINISHED_IRQ ${instreams[s]['irq']}
-% endfor
-% for s in outstreams:
-#define ${s.upper()}_DMA_FINISHED_IRQ ${outstreams[s]['irq']}
-% endfor
 
 // Hardware address pointers from ioremap
 // We do byte-wise pointer arithmetic on these, so use uchar
@@ -124,11 +118,7 @@ void dma_finished_work(struct work_struct*);
 DECLARE_WORK(dma_launch_struct, dma_launch_work);
 DECLARE_WORK(dma_finished_struct, dma_finished_work);
 
-int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
-
-#define ERROR(...) printk(__VA_ARGS__)
-#define DEBUG(...) if(debug_level > 0) printk(__VA_ARGS__)
-#define TRACE(...) if(debug_level > 1) printk(__VA_ARGS__)
+const int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
 
 /**
  * Probes the DMA engine to confirm that it exists at the assigned memory
@@ -160,10 +150,6 @@ int check_dma_engine(unsigned char* dma_controller)
 static int dev_open(struct inode *inode, struct file *file)
 {
   int i;
-  // Set up the image buffers; fail if it fails.
-  if(init_buffers(pipe_dev) < 0){
-    return(-ENOMEM);
-  }
 
   // Set up the image buffer set
   buffer_initlist(&free_list);
@@ -174,6 +160,7 @@ static int dev_open(struct inode *inode, struct file *file)
   // Allocate memory for the scatter-gather tables in the buffer set and put
   // them on the free list.  The actual data will be attached when needed.
   for(i = 0; i < N_DMA_BUFFERSETS; i++){
+    buffer_pool[i].id = i;
 % for s in streamNames:
     buffer_pool[i].${s}_sg = (unsigned long*) __get_free_pages(GFP_KERNEL, SG_PAGEORDER);
     if(buffer_pool[i].${s}_sg == NULL){
@@ -195,7 +182,6 @@ static int dev_close(struct inode *inode, struct file *file)
   int i;
 
   // TODO: Wait until the DMA engine is done, so we don't write to memory after freeing it
-  cleanup_buffers(pipe_dev); // Release all the buffer memory
 
   for(i = 0; i < N_DMA_BUFFERSETS; i++){
 % for s in streamNames:
@@ -248,13 +234,14 @@ void build_sg_chain(const Buffer buf, unsigned long* sg_ptr_base, unsigned long*
  * and flushes the cache. Then it drops the BufferSet into the
  * queue to be pushed to the stencil path DMA engine as soon as it's free.
  */
-long process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
+int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 {
   BufferSet* src;
 
 % for s in instreams:
   if(${s}_b->width != ${instreams[s]['width']} || 
      ${s}_b->height != ${instreams[s]['height']}){
+    // TODO: also add depth
     ERROR("Buffer size for ${s} doesn't match hardware!");
   }
 % endfor
@@ -294,7 +281,7 @@ long process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
   queue_work(dma_launch_queue, &dma_launch_struct);
 
   TRACE("process_image: queued work\n");
-  return(0);
+  return(src->id);
 }
 
 
@@ -385,7 +372,7 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 {
   iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
   wake_up_interruptible(&wq_${s});
-  DEBUG("DMA ${s} finished.");
+  DEBUG("irq: DMA ${s} finished.\n");
   return(IRQ_HANDLED);
 }
 % endfor
@@ -411,7 +398,7 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
   // Delegate the work of moving the buffer from "PROCESSING" to "FINISHED".
   // We can't do it here, since we're in an atomic context and trying to lock
   // access to the list could cause us to block.
-  DEBUG("Launching workqueue to complete processing");
+  DEBUG("irq: Launching workqueue to complete processing\n");
   // Launch a work queue task to write this to the DMA
   queue_work(dma_finished_queue, &dma_finished_struct);
 % endif
@@ -424,63 +411,33 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 /* Blocks until a result is complete, and removes the buffer set from the queue.
  * This should be called once for each process_image call.
  */
-void pend_processed(void)
+void pend_processed(int id)
 {
   BufferSet* resultSet;
 
-  TRACE("pend_processed: waiting for buffer");
+  TRACE("pend_processed: waiting for bufferset %d\n", id);
 
   // Block until a completed buffer becomes available
-  wait_event_interruptible(processing_finished, !buffer_listempty(&complete_list));
+  wait_event_interruptible(processing_finished, buffer_hasid(&complete_list, id));
 
   // Remove the buffer
-  resultSet = buffer_dequeue(&complete_list);
+  resultSet = buffer_dequeueid(&complete_list, id);
+  if(resultSet == NULL){
+    ERROR("buffer_dequeue for id %d failed!\n", id);
+    return;
+  }
 
   // Put the buffer set back on the free list
   buffer_enqueue(&free_list, resultSet);
   wake_up_interruptible(&buffer_free_queue);
 }
 
-void free_image(Buffer* buf)
-{
-  release_buffer(buf);
-  DEBUG("Releasing image\n");
-}
-
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-  Buffer tmp, *tmpptr;
   Buffer ${", ".join(["tmp_" + s for s in streamNames])};
 
-  zero_buffer(&tmp);
-% for s in streamNames:
-  zero_buffer(&tmp_${s});
-% endfor
-
-  DEBUG("ioctl cmd %d\n", cmd);
+  DEBUG("ioctl cmd %d | %lu (%lx) \n", cmd, arg, arg);
   switch(cmd){
-    case GET_BUFFER:
-      TRACE("ioctl: GET_BUFFER\n");
-      // Get the desired buffer parameters from the object passed to us
-      if(access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer)) &&
-         (copy_from_user(&tmp, (void*)arg, sizeof(Buffer)) == 0)){
-        tmpptr = acquire_buffer(tmp.width, tmp.height, tmp.depth, tmp.stride);
-        if(tmpptr == NULL){
-          return(-ENOBUFS);
-        }
-      }
-      else{
-        return(-EIO);
-      }
-
-      // Now copy the retrieved buffer back to the user
-      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(Buffer)) && 
-         (copy_to_user((void*)arg, tmpptr, sizeof(Buffer)) == 0)) { } // All ok, nothing to do
-      else{
-        return(-EIO);
-      }
-    break;
-
     case PROCESS_IMAGE:
       TRACE("ioctl: PROCESS_IMAGE\n");
       if(access_ok(VERIFY_READ, (void*)arg, ${len(streamNames)}*sizeof(Buffer)) &&
@@ -494,49 +451,14 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     case PEND_PROCESSED:
       TRACE("ioctl: PEND_PROCESSED\n");
-      pend_processed();
+      pend_processed(arg);
       break;
 
-    case FREE_IMAGE:
-      TRACE("ioctl: FREE_IMAGE\n");
-      // Copy the object into our tmp copy
-      if(access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer))){
-        copy_from_user(&tmp, (void*)arg, sizeof(Buffer));
-        free_image(&tmp);
-      }
-      else{
-        return(-EACCES);
-      }
-      break;
     default:
       return(-EINVAL); // Unknown command, return an error
       break;
   }
   return(0); // Success
-}
-
-int vma_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-  // Get the index of the page
-  // This is base_addr + offset
-  // TODO: do some error checking on the offset
-  vmf->page = virt_to_page(get_base_addr() + (vmf->pgoff << PAGE_SHIFT));
-  get_page(vmf->page);
-
-  //DEBUG("Page fault: %lu %x %x", vmf->pgoff, get_base_addr(), vmf->page);
-  return(0);
-}
-
-static struct vm_operations_struct vma_operations = {
-  .fault = vma_fault,
-};
-
-int dev_mmap(struct file *filp, struct vm_area_struct *vma)
-{
-  TRACE("dev_mmap\n");
-  // Just set up the operations; fault operation does all the hard work
-  vma->vm_ops = &vma_operations;
-  return 0;
 }
 
 
@@ -545,14 +467,22 @@ struct file_operations fops = {
   .open = dev_open,
   .release = dev_close,
   .unlocked_ioctl = dev_ioctl,
-  .mmap = dev_mmap,
 };
 
-static int pipe_driver_init(void)
+static int hwacc_probe(struct platform_device *pdev)
 {
   int irqok;
-% for s in streamNames:
-  irqok = request_irq(${s.upper()}_DMA_FINISHED_IRQ, dma_${s}_finished_handler, 0, "hwacc ${s}", NULL);
+  struct resource* r_irq = NULL;
+
+  // TODO: this is pretty fragile, as it relies on the ordering in the device
+  // tree.  It might be better to break them out in the device tree.
+% for n in range(len(streamNames)):
+  r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, ${n});
+  if(r_irq == NULL){
+    ERROR("IRQ lookup failed.  Check the device tree.\n");
+  }
+  TRACE("IRQ number is %d\n", r_irq->start);
+  irqok = request_irq(r_irq->start, dma_${streamNames[n]}_finished_handler, 0, "hwacc ${streamNames[n]}", NULL);
   if(irqok != 0){ return irqok; }
 % endfor
 
@@ -601,11 +531,17 @@ static int pipe_driver_init(void)
   return(0);
 }
 
-static void pipe_driver_exit(void)
+static int hwacc_remove(struct platform_device *pdev)
 {
+  struct resource* r_irq = NULL;
+
   // Release the IRQ lines
-% for s in streamNames:
-  free_irq(${s.upper()}_DMA_FINISHED_IRQ, NULL);
+% for n in range(len(streamNames)):
+  r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, ${n});
+  if(r_irq == NULL){
+    ERROR("IRQ lookup failed on release.  Check the device tree.\n");
+  }
+  free_irq(r_irq->start, NULL);
 % endfor
 
   device_unregister(pipe_dev);
@@ -618,8 +554,22 @@ static void pipe_driver_exit(void)
   iounmap(${s}_dma_controller);
 % endfor
   iounmap(acc_controller);
+  return(0);
 }
 
-module_init(pipe_driver_init);
-module_exit(pipe_driver_exit);
+static struct of_device_id hwacc_of_match[] = {
+  { .compatible = "hwacc", },
+  {}
+};
+
+static struct platform_driver hwacc_driver = {
+	.driver = {
+		.name = "hwacc",
+		.of_match_table = hwacc_of_match,
+	},
+	.probe = hwacc_probe,
+	.remove = hwacc_remove,
+};
+
+module_platform_driver(hwacc_driver)
 

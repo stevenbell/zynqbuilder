@@ -8,6 +8,7 @@
 #include "buffer.h"
 
 typedef struct BufferSet {
+  int id;
   // Each input/output stream is allocated separately and shuffled around
   // We have full copies since pointers we're handed may not persist
 % for s in dict(instreams.items() + outstreams.items()):
@@ -31,7 +32,9 @@ typedef struct BufferList{
 void buffer_initlist(BufferList *list);
 void buffer_enqueue(BufferList* list, BufferSet* buf);
 BufferSet* buffer_dequeue(BufferList* list);
+BufferSet* buffer_dequeueid(BufferList* list, int id);
 bool buffer_listempty(BufferList* list);
+bool buffer_hasid(BufferList* list, int id);
 
 #endif
 

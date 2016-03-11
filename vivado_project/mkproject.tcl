@@ -3,6 +3,9 @@
 #
 # Steven Bell <sebell@stanford.edu>, based on generated script from Vivado
 # 11 December 2015
+# Artem Vasilyev <tema8@stanord.edu>, fixed paths to components, added
+# parsing of IP information
+#  2 February 2016
 
 ################################################################
 # Check if script is running in correct Vivado version.

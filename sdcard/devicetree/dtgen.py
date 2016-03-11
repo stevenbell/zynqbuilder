@@ -8,17 +8,24 @@ import mako.exceptions
 import time
 from IPython import embed
 
-paramFile = "../hwconfig.yml"
-templateFiles = {"driver.c.mako":"driver.c", "dma_bufferset.h.mako":"dma_bufferset.h"}
+paramFile = "../../hwconfig.yml"
+templateFiles = {"devicetree.dts.mako":"devicetree.dts"}
 
 params = yaml.load(open(paramFile))
 
-params['toolName'] = "drivergen.py"
+params['toolName'] = "dtgen.py"
 params['date'] = time.asctime()
 
 # The stream names are specified in the file, but we need an ordered list
 # to be sure things like function calls work.
 params['streamNames'] = params['instreams'].keys() + params['outstreams'].keys()
+
+# Ordered list of the IRQs
+params['irqlist'] = []
+for name in params['instreams'].keys():
+  params['irqlist'].append(params['instreams'][name]['irq'])
+for name in params['outstreams'].keys():
+  params['irqlist'].append(params['outstreams'][name]['irq'])
 
 for f in templateFiles:
   src = open(f).read()
