@@ -29,7 +29,7 @@ cleanall:
 	make ARCH=$(ARCH) -C $(KER_DIR) M=$(PWD) clean
 	rm driver.c
 
-driver.c: driver.c.mako hwconfig.yml
+driver.c: driver.c.mako ../hwconfig.yml
 	python drivergen.py
 
 dma_bufferset.h: dma_bufferset.h.mako
