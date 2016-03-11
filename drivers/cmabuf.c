@@ -21,6 +21,8 @@ struct class *cmabuf_class;
 
 const int debug_level = 4; // 0 is errors only, increasing numbers print more stuff
 
+// TODO: allow the file handle to be opened multiple times, and access
+// the same pool of memory?
 static int dev_open(struct inode *inode, struct file *file)
 {
   TRACE("cmabuffer: dev_open");

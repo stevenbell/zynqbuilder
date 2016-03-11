@@ -9,8 +9,8 @@ obj-m := hwacc.o xilcam.o cmabuffer.o
 
 # Dependencies for each of the modules
 # Note that some code related to buffer handling and ioctl numbers is shared
-hwacc-objs := driver.o dma_bufferset.o buffer.o
-xilcam-objs := vdma.o buffer.o
+hwacc-objs := driver.o dma_bufferset.o
+xilcam-objs := vdma.o
 cmabuffer-objs := cmabuf.o buffer.o
 
 # Call the Linux source makefiles to do the dirty work

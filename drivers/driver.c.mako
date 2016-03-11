@@ -118,7 +118,7 @@ void dma_finished_work(struct work_struct*);
 DECLARE_WORK(dma_launch_struct, dma_launch_work);
 DECLARE_WORK(dma_finished_struct, dma_finished_work);
 
-int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
+const int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
 
 /**
  * Probes the DMA engine to confirm that it exists at the assigned memory
@@ -435,10 +435,6 @@ void pend_processed(int id)
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
   Buffer ${", ".join(["tmp_" + s for s in streamNames])};
-
-% for s in streamNames:
-  zero_buffer(&tmp_${s});
-% endfor
 
   DEBUG("ioctl cmd %d | %lu (%lx) \n", cmd, arg, arg);
   switch(cmd){

@@ -7,6 +7,9 @@ twoinput: twoinput.cpp
 testcma: testcma.cpp
 	$(CROSS_COMPILE)g++ -g -I ../drivers/ testcma.cpp -o testcma
 
+grabimage: grabimage.cpp
+	$(CROSS_COMPILE)g++ -g -I ../drivers/ grabimage.cpp -o grabimage
+
 
 clean:
 	rm twoinput

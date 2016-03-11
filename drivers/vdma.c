@@ -15,17 +15,15 @@
 #include <linux/sched.h> // current task struct
 #include <linux/fs.h> // File node numbers
 #include <linux/device.h>
-#include <linux/interrupt.h>
-#include <linux/dma-mapping.h>
-#include <linux/mm.h>
-#include <linux/pagemap.h>
 
 #include "common.h"
 #include "buffer.h"
 #include "ioctl_cmds.h"
 
-#define CLASSNAME "vdma" // Shows up in /sys/class
-#define DEVNAME "vdma0" // Shows up in /dev
+MODULE_LICENSE("GPL");
+
+#define CLASSNAME "xilcam" // Shows up in /sys/class
+#define DEVNAME "xilcam0" // Shows up in /dev
 
 #define VDMA_CONTROLLER_BASE 0x43000000
 #define VDMA_CONTROLLER_SIZE 0x100
@@ -120,11 +118,9 @@ int grab_image(Buffer* buf)
 }
 
 
-
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
   Buffer tmp;
-  zero_buffer(&tmp);
 
   switch(cmd){
     case GRAB_IMAGE:
@@ -151,7 +147,7 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 }
 
 struct file_operations fops = {
-  // No read/write; everything is handled by ioctl and mmap
+  // No read/write; everything is handled by ioctl
   .open = dev_open,
   .release = dev_close,
   .unlocked_ioctl = dev_ioctl,
@@ -162,7 +158,7 @@ static int vdma_driver_init(void)
 {
   // Get a single character device number
   alloc_chrdev_region(&device_num, 0, 1, DEVNAME);
-  DEBUG("Device registered with major %d, minor: %d\n", MAJOR(device_num), MINOR(device_num));
+  DEBUG("VDMA device registered with major %d, minor: %d\n", MAJOR(device_num), MINOR(device_num));
 
   // Set up the device and class structures so we show up in sysfs,
   // and so we have a device we can hand to the DMA request
@@ -173,13 +169,10 @@ static int vdma_driver_init(void)
   // MKDEV(MAJOR(device_num), minor_num)
   vdma_dev = device_create(vdma_class, NULL, device_num, 0, DEVNAME);
 
-
   vdma_controller = ioremap(VDMA_CONTROLLER_BASE, VDMA_CONTROLLER_SIZE);
   if(vdma_controller == NULL){
     return(-ENODEV);
   }
-
-
 
   // Register the driver with the kernel
   chardev = cdev_alloc();
@@ -192,7 +185,10 @@ static int vdma_driver_init(void)
 
 static void vdma_driver_exit(void)
 {
-  // TODO: unregister, clean up, etc.
+  device_unregister(vdma_dev);
+  class_destroy(vdma_class);
+  cdev_del(chardev);
+  unregister_chrdev_region(device_num, 1);
 
   iounmap(vdma_controller);
 }
