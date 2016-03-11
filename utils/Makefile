@@ -10,7 +10,9 @@ testcma: testcma.cpp
 grabimage: grabimage.cpp
 	$(CROSS_COMPILE)g++ -g -I ../drivers/ grabimage.cpp -o grabimage
 
+grabprocess: grabprocess.cpp
+	$(CROSS_COMPILE)g++ -g -I ../drivers/ grabprocess.cpp -o grabprocess
 
 clean:
-	rm twoinput
+	rm twoinput testcma grabimage grabprocess
 
