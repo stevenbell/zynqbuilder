@@ -79,23 +79,12 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     case FREE_IMAGE:
       TRACE("ioctl: FREE_IMAGE\n");
       // Copy the object into our tmp copy
-      /*
       if(access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer)) &&
-         copy_from_user(&tmp, (void*)arg, sizeof(Buffer) == 0)){
+         copy_from_user(&tmp, (void*)arg, sizeof(Buffer)) == 0){
           free_image(&tmp);
       }
       else{
         return(-EACCES);
-      }
-      */
-      if(!access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer))) {
-        DEBUG("FREE_IMAGE failed: arg(0x08%lx) is not readable.\n", arg);
-        return(-EACCES);
-      } else if (copy_from_user(&tmp, (void*)arg, sizeof(Buffer) != 0)){
-        DEBUG("FREE_IMAGE failed: copy_from_user failed.\n");
-        return(-EACCES);
-      } else{
-          free_image(&tmp);
       }
       break;
 
