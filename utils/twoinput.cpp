@@ -8,6 +8,13 @@
 
 int main(int argc, char* argv[])
 {
+  // Open the buffer allocation device
+  int cma = open("/dev/cmabuffer0", O_RDWR);
+  if(cma == -1){
+    printf("Failed to open cma provider!\n");
+    return(0);
+  }
+
   // Open the hardware device
   int hwacc = open("/dev/hwacc0", O_RDWR);
   if(hwacc == -1){
@@ -27,19 +34,19 @@ int main(int argc, char* argv[])
   bufs[2].depth = 4;
   bufs[2].stride = 256;
 
-  int ok = ioctl(hwacc, GET_BUFFER, (long unsigned int)bufs);
+  int ok = ioctl(cma, GET_BUFFER, (long unsigned int)bufs);
   if(ok < 0){
     printf("Failed to allocate buffer 0!\n");
     return(0);
   }
 
-  ok = ioctl(hwacc, GET_BUFFER, (long unsigned int)(bufs + 1));
+  ok = ioctl(cma, GET_BUFFER, (long unsigned int)(bufs + 1));
   if(ok < 0){
     printf("Failed to allocate buffer 1!\n");
     return(0);
   }
 
-  ok = ioctl(hwacc, GET_BUFFER, (long unsigned int)(bufs + 2));
+  ok = ioctl(cma, GET_BUFFER, (long unsigned int)(bufs + 2));
   if(ok < 0){
     printf("Failed to allocate buffer 2!\n");
     return(0);
@@ -48,7 +55,7 @@ int main(int argc, char* argv[])
 
   // Fill the first buffer with vertical stripes
   long* data = (long*) mmap(NULL, bufs[0].stride * bufs[0].height * bufs[0].depth,
-                            PROT_WRITE, MAP_SHARED, hwacc, bufs[0].mmap_offset);
+                            PROT_WRITE, MAP_SHARED, cma, bufs[0].mmap_offset);
   if(data == MAP_FAILED){
     printf("mmap 0 failed!\n");
     return(0);
@@ -64,7 +71,7 @@ int main(int argc, char* argv[])
 
   // Fill the second buffer with horizonal stripes
   data = (long*) mmap(NULL, bufs[1].stride * bufs[1].height * bufs[1].depth,
-                      PROT_WRITE, MAP_SHARED, hwacc, bufs[1].mmap_offset);
+                      PROT_WRITE, MAP_SHARED, cma, bufs[1].mmap_offset);
   if(data == MAP_FAILED){
     printf("mmap 1 failed!\n");
     return(0);
@@ -88,7 +95,7 @@ int main(int argc, char* argv[])
 
   // Print out the result buffer
   data = (long*) mmap(NULL, bufs[2].stride * bufs[2].height * bufs[2].depth,
-                      PROT_READ, MAP_SHARED, hwacc, bufs[2].mmap_offset);
+                      PROT_READ, MAP_SHARED, cma, bufs[2].mmap_offset);
   if(data == MAP_FAILED){
     printf("mmap 2 failed!\n");
     return(0);
@@ -102,11 +109,12 @@ int main(int argc, char* argv[])
   }
   munmap((void*)data, bufs[2].stride * bufs[2].height * bufs[2].depth);
 
-  ok = ioctl(hwacc, FREE_IMAGE, (long unsigned int)bufs);
-  ok = ioctl(hwacc, FREE_IMAGE, (long unsigned int)(bufs + 1));
-  ok = ioctl(hwacc, FREE_IMAGE, (long unsigned int)(bufs + 2));
+  ok = ioctl(cma, FREE_IMAGE, (long unsigned int)bufs);
+  ok = ioctl(cma, FREE_IMAGE, (long unsigned int)(bufs + 1));
+  ok = ioctl(cma, FREE_IMAGE, (long unsigned int)(bufs + 2));
 
   close(hwacc);
+  close(cma);
   return(0);
 }
 

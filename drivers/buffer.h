@@ -30,6 +30,7 @@ typedef struct
  * pools of memory and filling out buffer structs. */
 int init_buffers(struct device* dev);
 void cleanup_buffers(struct device* dev);
+bool offset_in_range(unsigned long offset);
 void* get_base_addr(void); // TODO remove this in favor of a better mmap solution?
 
 /* Gets a buffer of the requested size.
