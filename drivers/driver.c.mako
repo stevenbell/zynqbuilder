@@ -155,7 +155,8 @@ int check_dma_engine(unsigned char* dma_controller)
   if (use_acp) {
     // setup SG_CTL register
     // SG_CACHE: 1111 defines memory type as 'write-back read and write-allocate'
-    iowrite32(0x0000000f, (void*)dma_controller + 0x2c);
+    // SG_USER: tie off high to enable coherency when allowed by SG_CACHE
+    iowrite32(0x00000f0f, (void*)dma_controller + 0x2c);
 
     // Note that S2MM and MM2S share the same SG_CTL, so the write w.r.t the
     // output DMA is unnecessary, but the out-of-range write looks fine
@@ -263,10 +264,11 @@ void build_sg_chain_2D(const Buffer buf, unsigned long* sg_ptr_base, unsigned lo
   sg_ptr[3] = 0; // Upper 32 bits of data address (unused)
 
   // 0x10: AxUSER|AxCACHE|Rsvd|TUSER|Rsvd|TID|Rsvd|TDEST
-  // AxCACHE: 0011 defines memory type as 'normal non-cacheable bufferable'
-  // AxCACHE: 1111 defines memory type as 'write-back read and write-allocate'
   if (use_acp) {
-    sg_ptr[4] = 0x0f000000; // values for AxCACHE (1111) and AxUSER (0000)
+    // AxCACHE: 0011 defines memory type as 'normal non-cacheable bufferable'
+    // AxCACHE: 1111 defines memory type as 'write-back read and write-allocate'
+    // AxUSER: tie off high to enable coherency when allowed by AxCACHE
+    sg_ptr[4] = 0xff000000; // values for AxCACHE (1111) and AxUSER (1111)
   } else {
     // for some reason, AxCACHE (1111) with dma_map/unmap doesn't
     // work correctly on Linux 4.0 kernel, so we use 0011 for AxCACHE field
