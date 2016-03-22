@@ -7,7 +7,7 @@
  * it without having to do any copying.  The other zero-copy method is scatter-
  * gather to userspace, but then we have to worry about the SG table and cache
  * flush/invalidate.
- * 
+ *
  *
  * Steven Bell <sebell@stanford.edu>
  * 28 February 2014
@@ -55,7 +55,7 @@ MODULE_LICENSE("GPL");
 // Hardware address pointers from ioremap
 // We do byte-wise pointer arithmetic on these, so use uchar
 % for s in streamNames:
-unsigned char* ${s}_dma_controller; 
+unsigned char* ${s}_dma_controller;
 % endfor
 unsigned char* acc_controller;
 
@@ -64,7 +64,7 @@ struct cdev *chardev;
 struct device *pipe_dev;
 struct class *pipe_class;
 
-#define N_DMA_BUFFERSETS 4 // Number of "buffer set" objects for passing through the queues
+#define N_DMA_BUFFERSETS 16 // Number of "buffer set" objects for passing through the queues
 BufferSet buffer_pool[N_DMA_BUFFERSETS];
 
 #define SG_DESC_SIZE 16 // Size of each SG descriptor, in 32-byte words
@@ -120,6 +120,14 @@ DECLARE_WORK(dma_finished_struct, dma_finished_work);
 
 const int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
 
+// If the DMAs are configured in the multichannel mode,
+// use this flag to enable 2D transfer mode
+const bool use_2D_mode = true;
+
+// If the device use the accelerator coherency port (ACP) of PS,
+// use this flag to enforce cache coherency and to avoid cache flushing
+const bool use_acp = true;
+
 /**
  * Probes the DMA engine to confirm that it exists at the assigned memory
  * location and that scatter-gather DMA is built-in.  The only reason
@@ -144,6 +152,15 @@ int check_dma_engine(unsigned char* dma_controller)
     while(ioread32((void*)dma_controller + 0x00) & 0x00000004) {}
   }
 
+  if (use_acp) {
+    // setup SG_CTL register
+    // SG_CACHE: 1111 defines memory type as 'write-back read and write-allocate'
+    // SG_USER: tie off high to enable coherency when allowed by SG_CACHE
+    iowrite32(0x00000f0f, (void*)dma_controller + 0x2c);
+
+    // Note that S2MM and MM2S share the same SG_CTL, so the write w.r.t the
+    // output DMA is unnecessary, but the out-of-range write looks fine
+  }
   return(0);
 }
 
@@ -225,9 +242,60 @@ void build_sg_chain(const Buffer buf, unsigned long* sg_ptr_base, unsigned long*
 
   // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
   // regardless of the data direction.
-  *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
+  if (use_acp) {
+    *sg_phys = virt_to_phys(sg_ptr_base);
+  } else {
+    *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
+  }
 }
 
+// Use 2-D transfer feature in Xilinx AXI DMA.
+// To enable this feature, DMA IP needs to be configured with Multichannel mode enabled.
+// With this feature, a transfer of a sub-block of 2-D data requires only one descriptor.
+void build_sg_chain_2D(const Buffer buf, unsigned long* sg_ptr_base, unsigned long* sg_phys)
+{
+  unsigned long* sg_ptr = sg_ptr_base; // Pointer which will be incremented along the chain
+  TRACE("build_sg_chain_2D: sg_ptr 0x%lx, sg_phys 0x%lx\n", (unsigned long)sg_ptr, (unsigned long)sg_phys);
+
+  // the sg chain only has one descriptor
+  sg_ptr[0] = virt_to_phys(sg_ptr + SG_DESC_SIZE); // Pointer to next descriptor
+  sg_ptr[1] = 0; // Upper 32 bits of descriptor pointer (unused)
+  sg_ptr[2] = buf.phys_addr; // Address where the data lives
+  sg_ptr[3] = 0; // Upper 32 bits of data address (unused)
+
+  // 0x10: AxUSER|AxCACHE|Rsvd|TUSER|Rsvd|TID|Rsvd|TDEST
+  if (use_acp) {
+    // AxCACHE: 0011 defines memory type as 'normal non-cacheable bufferable'
+    // AxCACHE: 1111 defines memory type as 'write-back read and write-allocate'
+    // AxUSER: tie off high to enable coherency when allowed by AxCACHE
+    sg_ptr[4] = 0xff000000; // values for AxCACHE (1111) and AxUSER (1111)
+  } else {
+    // for some reason, AxCACHE (1111) with dma_map/unmap doesn't
+    // work correctly on Linux 4.0 kernel, so we use 0011 for AxCACHE field
+    sg_ptr[4] = 0x03000000; // values for AxCACHE (0011) and AxUSER (0000)
+  }
+
+  // 0x14: VSIZE|Rsvd|Stride
+  sg_ptr[5] = buf.stride * buf.depth;  // Stride of the 2D block
+  sg_ptr[5] |= (buf.height << 19);     // VSize, i.e. the height of the block
+
+  // 0x18: SOP|EOP|Rsvd|HSIZE
+  sg_ptr[6] = (buf.width * buf.depth); // Width of data is width*depth of image
+  sg_ptr[6] |= 0x08000000; // Start of frame flag
+  sg_ptr[6] |= 0x04000000; // End of frame flag
+
+  sg_ptr[7] = 0; // Clear the status; the DMA engine will set this
+
+  TRACE("build_sg_chain_2D: built SG table\n");
+
+  // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
+  // regardless of the data direction.
+  if (use_acp) {
+    *sg_phys = virt_to_phys(sg_ptr_base);
+  } else {
+    *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * 1, DMA_TO_DEVICE);
+  }
+}
 
 /* Sets up a buffer for processing through the stencil path.  This drops the
  * image buffers into a BufferSet object, builds the scatter-gather tables,
@@ -239,7 +307,7 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
   BufferSet* src;
 
 % for s in instreams:
-  if(${s}_b->width != ${instreams[s]['width']} || 
+  if(${s}_b->width != ${instreams[s]['width']} ||
      ${s}_b->height != ${instreams[s]['height']}){
     // TODO: also add depth
     ERROR("Buffer size for ${s} doesn't match hardware!");
@@ -258,20 +326,25 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 
   // Set up the scatter-gather descriptor chains
 % for s in streamNames:
-  build_sg_chain(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
+  if (use_2D_mode)
+    build_sg_chain_2D(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
+  else
+    build_sg_chain(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
 % endfor
 
   // Map the buffers for DMA
   // This causes cache flushes for the source buffer(s)
   // The invalidate for the result happens on the unmap
+  if (!use_acp) {
 % for s in instreams:
-  dma_map_single(pipe_dev, src->${s}.kern_addr,
-                 src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_TO_DEVICE);
+    dma_map_single(pipe_dev, src->${s}.kern_addr,
+                   src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_TO_DEVICE);
 % endfor
 % for s in outstreams:
-  dma_map_single(pipe_dev, src->${s}.kern_addr,
-                 src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
+    dma_map_single(pipe_dev, src->${s}.kern_addr,
+                   src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
 % endfor
+  }
 
   // Now throw this whole thing into the queue.
   // When the DMA engine is free, it will get pulled off and run.
@@ -288,10 +361,10 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 void dma_launch_work(struct work_struct* ws)
 {
   BufferSet* buf;
-  TRACE("dma_launch_work");
+  TRACE("dma_launch_work: \n");
   while(!buffer_listempty(&queued_list)){
     buf = buffer_dequeue(&queued_list);
-    
+
     // Sleep until all the DMA engines are idle or halted (bits 0 and 1)
     // Write should always be idle first, but do all of them to be safe
 % for s in streamNames:
@@ -300,7 +373,7 @@ void dma_launch_work(struct work_struct* ws)
 
     // TODO: set taps, LUTs, etc
 
-    TRACE("Writing DMA registers\n");
+    TRACE("dma_launch_work: writing DMA registers\n");
     // Kick off the DMA write operations
 % for s in streamNames:
 
@@ -308,7 +381,10 @@ void dma_launch_work(struct work_struct* ws)
     iowrite32(0x00010002, ${s}_dma_controller + 0x00); // Stop, so we can set the head ptr
     iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x08); // Pointer to the first descriptor
     iowrite32(0x00011003, ${s}_dma_controller + 0x00); // Run and enable interrupts
-    iowrite32(buf->${s}_sg_phys + (buf->${s}.height - 1) * SG_DESC_BYTES, ${s}_dma_controller + 0x10); // Last descriptor, starts transfer
+    if (use_2D_mode)
+      iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x10); // 2D mode: Last descriptor, starts transfer
+    else
+      iowrite32(buf->${s}_sg_phys + (buf->${s}.height - 1) * SG_DESC_BYTES, ${s}_dma_controller + 0x10); // Last descriptor, starts transfer
 % endfor
 
     // Start the stencil engine running
@@ -323,7 +399,7 @@ void dma_launch_work(struct work_struct* ws)
 void dma_finished_work(struct work_struct* ws)
 {
   BufferSet* buf;
-  TRACE("dma_finished_work");
+  TRACE("dma_finished_work: \n");
 
   // Check that all of the output DMAs have completed their work
   // TODO: bugs may lurk here if there are multiple outputs and the primary
@@ -341,21 +417,25 @@ void dma_finished_work(struct work_struct* ws)
     DEBUG("dma_finished_work: buf: %lx\n", (unsigned long)buf);
 
     // Unmap each of the SG buffers
+    if (!use_acp) {
 % for s in streamNames:
-    dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
+      dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
 % endfor
+    }
 
     // Unmap all the input and output buffers (with appropriate direction)
     // For the source buffers, this should do nothing.  For the result buffers,
     // it should cause a cache invalidate.
+    if (!use_acp) {
 % for s in instreams:
     dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-                 buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
+                     buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
 % endfor
 % for s in outstreams:
     dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-                 buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
+                     buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
 % endfor
+    }
 
     buffer_enqueue(&complete_list, buf);
   }
@@ -383,10 +463,10 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 // the semaphore.
 % for s in outstreams:
 irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
-{ 
+{
   iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
   wake_up_interruptible(&wq_${s}); // The next processing action can now start
-  DEBUG("DMA ${s} finished.");
+  DEBUG("irq: DMA ${s} finished.\n");
 
   // Keep an explicit count of the number of buffers, to cover the rare
   // (hopefully impossible) case where a second buffer finished before the work
@@ -416,6 +496,14 @@ void pend_processed(int id)
   BufferSet* resultSet;
 
   TRACE("pend_processed: waiting for bufferset %d\n", id);
+
+  /*
+  // polls IDLE bit of the output DMA
+  do {
+    status = ioread32((void*)output_dma_controller + 0x04);
+  } while((status & 0x2) == 0);
+  TRACE("pend_processed: output dma idle.");
+  */
 
   // Block until a completed buffer becomes available
   wait_event_interruptible(processing_finished, buffer_hasid(&complete_list, id));
@@ -448,12 +536,10 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         return(-EIO); // can't read or copy; more informative error here?
       }
       break;
-
     case PEND_PROCESSED:
       TRACE("ioctl: PEND_PROCESSED\n");
       pend_processed(arg);
       break;
-
     default:
       return(-EINVAL); // Unknown command, return an error
       break;
@@ -528,6 +614,7 @@ static int hwacc_probe(struct platform_device *pdev)
   cdev_add(chardev, device_num, 1);
 
   DEBUG("Driver initialized\n");
+
   return(0);
 }
 

@@ -20,7 +20,7 @@ extern const int debug_level; // This is defined in the including driver
 // Asking for smaller images just returns a whole large buffer, and asking
 // for a larger image fails.  A better solution would be to use a buddy
 // allocator and give out pieces that are only as large as necessary.
-#define N_BUFFERS 10
+#define N_BUFFERS 16
 #define BUFFER_SIZE (2048*1080*4) // This number must be a multiple of 4k pages so mmap works
 
 unsigned char free_flag[N_BUFFERS];
@@ -106,8 +106,8 @@ Buffer* acquire_buffer(unsigned int width, unsigned int height, unsigned int dep
 
   // Scan through the list and grab the first free one
   while(i < N_BUFFERS && free_flag[i] == 0){
-//printk("acquire_bufffer: %d is already taken, counting to %d\n", i, N_BUFFERS);
-i++;
+    //printk("acquire_bufffer: %d is already taken, counting to %d\n", i, N_BUFFERS);
+    i++;
   }
   if(i < N_BUFFERS){
     free_flag[i] = 0; // Mark as used
@@ -118,14 +118,14 @@ i++;
     buffers[i].depth = depth;
     buffers[i].stride = stride;
 
-/*
+    /*
 printk("clearing buffer %d at %lx\n", i, buffers[i].kern_addr);
   data = (unsigned long*) buffers[i].kern_addr;
   for(j = 0; j < width*height*depth / sizeof(unsigned long); j++){
     data[j] = 0xee;
   }
 */
-printk("acquire_buffer: Returning buffer %d\n", i);
+    printk("acquire_buffer: Returning buffer %d\n", i);
     return(buffers + i);
   }
   else{
@@ -145,6 +145,7 @@ void release_buffer(Buffer* buf)
   // TODO: error/bounds checking
   free_flag[buf->id] = 1; // Mark as free
   // Trust the user to quit using the pointer
+  TRACE("release_buffer: free buffer %d\n", buf->id);
 }
 
 EXPORT_SYMBOL(acquire_buffer);

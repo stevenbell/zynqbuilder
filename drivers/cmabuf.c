@@ -69,7 +69,7 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
 
       // Now copy the retrieved buffer back to the user
-      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(Buffer)) && 
+      if(access_ok(VERIFY_WRITE, (void*)arg, sizeof(Buffer)) &&
          (copy_to_user((void*)arg, tmpptr, sizeof(Buffer)) == 0)) { } // All ok, nothing to do
       else{
         return(-EIO);
@@ -80,7 +80,7 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       TRACE("ioctl: FREE_IMAGE\n");
       // Copy the object into our tmp copy
       if(access_ok(VERIFY_READ, (void*)arg, sizeof(Buffer)) &&
-         copy_from_user(&tmp, (void*)arg, sizeof(Buffer) == 0)){
+         copy_from_user(&tmp, (void*)arg, sizeof(Buffer)) == 0){
           free_image(&tmp);
       }
       else{

@@ -1,5 +1,6 @@
 ARCH := arm
-KER_DIR := /home/steven/work/linux-xlnx/
+KER_DIR := /nobackup/sebell/share/linux-xlnx/
+#KER_DIR := /cad/xilinx/linux-xlnx/
 
 # There are three modules created from this source code
 #   cmabuffer - Provides access to large contiguous memory buffers from Linux CMA
