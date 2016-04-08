@@ -286,13 +286,13 @@ void build_sg_chain_2D(const Buffer buf, unsigned long* sg_ptr_base, unsigned lo
 
   sg_ptr[7] = 0; // Clear the status; the DMA engine will set this
 
-  TRACE("build_sg_chain_2D: built SG table\n");
 
   // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
   // regardless of the data direction.
   if (use_acp) {
     *sg_phys = virt_to_phys(sg_ptr_base);
   } else {
+    TRACE("build_sg_chain_2D: call dma_map_single()\n");
     *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * 1, DMA_TO_DEVICE);
   }
 }
@@ -353,7 +353,7 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
   // Launch a work queue task to write this to the DMA
   queue_work(dma_launch_queue, &dma_launch_struct);
 
-  TRACE("process_image: queued work\n");
+  TRACE("process_image: return\n");
   return(src->id);
 }
 
@@ -361,7 +361,7 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
 void dma_launch_work(struct work_struct* ws)
 {
   BufferSet* buf;
-  TRACE("dma_launch_work: \n");
+  TRACE("dma_launch_work: begin\n");
   while(!buffer_listempty(&queued_list)){
     buf = buffer_dequeue(&queued_list);
 
@@ -377,7 +377,7 @@ void dma_launch_work(struct work_struct* ws)
     // Kick off the DMA write operations
 % for s in streamNames:
 
-    TRACE("dma_launch_work: sg_phys 0x%lx\n", (unsigned long)buf->${s}_sg_phys);
+    DEBUG("dma_launch_work: sg_phys 0x%lx\n", (unsigned long)buf->${s}_sg_phys);
     iowrite32(0x00010002, ${s}_dma_controller + 0x00); // Stop, so we can set the head ptr
     iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x08); // Pointer to the first descriptor
     iowrite32(0x00011003, ${s}_dma_controller + 0x00); // Run and enable interrupts
@@ -399,7 +399,7 @@ void dma_launch_work(struct work_struct* ws)
 void dma_finished_work(struct work_struct* ws)
 {
   BufferSet* buf;
-  TRACE("dma_finished_work: \n");
+  TRACE("dma_finished_work: begin\n");
 
   // Check that all of the output DMAs have completed their work
   // TODO: bugs may lurk here if there are multiple outputs and the primary
@@ -466,7 +466,7 @@ irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
 {
   iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
   wake_up_interruptible(&wq_${s}); // The next processing action can now start
-  DEBUG("irq: DMA ${s} finished.\n");
+  TRACE("irq: DMA ${s} finished.\n");
 
   // Keep an explicit count of the number of buffers, to cover the rare
   // (hopefully impossible) case where a second buffer finished before the work
@@ -495,15 +495,7 @@ void pend_processed(int id)
 {
   BufferSet* resultSet;
 
-  TRACE("pend_processed: waiting for bufferset %d\n", id);
-
-  /*
-  // polls IDLE bit of the output DMA
-  do {
-    status = ioread32((void*)output_dma_controller + 0x04);
-  } while((status & 0x2) == 0);
-  TRACE("pend_processed: output dma idle.");
-  */
+  TRACE("pend_processed: begin for bufferset %d\n", id);
 
   // Block until a completed buffer becomes available
   wait_event_interruptible(processing_finished, buffer_hasid(&complete_list, id));
@@ -518,6 +510,8 @@ void pend_processed(int id)
   // Put the buffer set back on the free list
   buffer_enqueue(&free_list, resultSet);
   wake_up_interruptible(&buffer_free_queue);
+
+  TRACE("pend_processed: return for bufferset %d\n", id);
 }
 
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)

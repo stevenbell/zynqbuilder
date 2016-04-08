@@ -96,11 +96,11 @@ Buffer* acquire_buffer(unsigned int width, unsigned int height, unsigned int dep
   }
 
   if(width > stride){
-    printk("acquire_buffer failed: width (%d) must be <= to stride (%d)\n", width, stride);
+    ERROR("acquire_buffer failed: width (%d) must be <= to stride (%d)\n", width, stride);
     return NULL;
   }
   if((stride * height * depth) > BUFFER_SIZE){
-    printk("acquire_buffer failed: requested bytes (%d) exceeds maximum (%d)\n", (stride*height*depth), BUFFER_SIZE);
+    ERROR("acquire_buffer failed: requested bytes (%d) exceeds maximum (%d)\n", (stride*height*depth), BUFFER_SIZE);
     return NULL;
   }
 
@@ -125,12 +125,12 @@ printk("clearing buffer %d at %lx\n", i, buffers[i].kern_addr);
     data[j] = 0xee;
   }
 */
-    printk("acquire_buffer: Returning buffer %d\n", i);
+    DEBUG("acquire_buffer: Returning buffer %d\n", i);
     return(buffers + i);
   }
   else{
     // We ran off the end without finding a free buffer
-    printk("acquire_buffer failed: no free buffers\n");
+    ERROR("acquire_buffer failed: no free buffers\n");
     return(NULL);
   }
 }
@@ -145,7 +145,7 @@ void release_buffer(Buffer* buf)
   // TODO: error/bounds checking
   free_flag[buf->id] = 1; // Mark as free
   // Trust the user to quit using the pointer
-  TRACE("release_buffer: free buffer %d\n", buf->id);
+  DEBUG("release_buffer: free buffer %d\n", buf->id);
 }
 
 EXPORT_SYMBOL(acquire_buffer);
