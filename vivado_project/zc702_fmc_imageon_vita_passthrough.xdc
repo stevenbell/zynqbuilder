@@ -3,23 +3,23 @@
 ########################
 
 # I2C Chain on FMC-IMAGEON
-set_property PACKAGE_PIN AB14 [get_ports {fmc_imageon_iic_scl_io}]
-set_property IOSTANDARD LVCMOS25 [get_ports {fmc_imageon_iic_scl_io}]
-set_property SLEW SLOW [get_ports {fmc_imageon_iic_scl_io}]
-set_property DRIVE 8 [get_ports {fmc_imageon_iic_scl_io}]
+set_property PACKAGE_PIN AB14 [get_ports fmc_imageon_iic_scl_io]
+set_property IOSTANDARD LVCMOS25 [get_ports fmc_imageon_iic_scl_io]
+set_property SLEW SLOW [get_ports fmc_imageon_iic_scl_io]
+set_property DRIVE 8 [get_ports fmc_imageon_iic_scl_io]
 
-set_property PACKAGE_PIN AB15 [get_ports {fmc_imageon_iic_sda_io}]
-set_property IOSTANDARD LVCMOS25 [get_ports {fmc_imageon_iic_sda_io}]
-set_property SLEW SLOW [get_ports {fmc_imageon_iic_sda_io}]
-set_property DRIVE 8 [get_ports {fmc_imageon_iic_sda_io}]
+set_property PACKAGE_PIN AB15 [get_ports fmc_imageon_iic_sda_io]
+set_property IOSTANDARD LVCMOS25 [get_ports fmc_imageon_iic_sda_io]
+set_property SLEW SLOW [get_ports fmc_imageon_iic_sda_io]
+set_property DRIVE 8 [get_ports fmc_imageon_iic_sda_io]
 
-set_property PACKAGE_PIN Y16 [get_ports {fmc_imageon_iic_rst_n}]
-set_property IOSTANDARD LVCMOS25 [get_ports {fmc_imageon_iic_rst_n}]
-set_property SLEW SLOW [get_ports {fmc_imageon_iic_rst_n}]
-set_property DRIVE 8 [get_ports {fmc_imageon_iic_rst_n}]
+set_property PACKAGE_PIN Y16 [get_ports {fmc_imageon_iic_rst_n[0]}]
+set_property IOSTANDARD LVCMOS25 [get_ports {fmc_imageon_iic_rst_n[0]}]
+set_property SLEW SLOW [get_ports {fmc_imageon_iic_rst_n[0]}]
+set_property DRIVE 8 [get_ports {fmc_imageon_iic_rst_n[0]}]
 
 
-# HDMI Output (ADV7511) on FMC-IMAGEON 
+# HDMI Output (ADV7511) on FMC-IMAGEON
 #set_property PACKAGE_PIN Y5 [get_ports hdmio_io_clk]
 #set_property IOSTANDARD LVCMOS25 [get_ports hdmio_io_clk]
 
@@ -75,29 +75,23 @@ set_property DRIVE 8 [get_ports {fmc_imageon_iic_rst_n}]
 #set_property IOSTANDARD LVCMOS25 [get_ports hdmio_io_spdif]
 
 # VITA interface
-set_property PACKAGE_PIN V22 [get_ports vita_cam_clk_pll];
-set_property PACKAGE_PIN AA18 [get_ports vita_cam_reset_n];
-set_property PACKAGE_PIN W22 [get_ports {vita_cam_trigger[2]}];
-set_property PACKAGE_PIN T22 [get_ports {vita_cam_trigger[1]}];
-set_property PACKAGE_PIN U22 [get_ports {vita_cam_trigger[0]}];
-set_property PACKAGE_PIN Y13 [get_ports {vita_cam_monitor[0]}];
-set_property PACKAGE_PIN AA13 [get_ports {vita_cam_monitor[1]}];
-set_property PACKAGE_PIN W15 [get_ports vita_spi_spi_sclk];
-set_property PACKAGE_PIN Y15 [get_ports vita_spi_spi_ssel_n];
-set_property PACKAGE_PIN Y14 [get_ports vita_spi_spi_mosi];
-set_property PACKAGE_PIN AA14 [get_ports vita_spi_spi_miso];
-set_property PACKAGE_PIN Y19 [get_ports vita_cam_clk_out_p];
-set_property PACKAGE_PIN AA19 [get_ports vita_cam_clk_out_n];
-set_property PACKAGE_PIN Y20 [get_ports vita_cam_sync_p];
-set_property PACKAGE_PIN Y21 [get_ports vita_cam_sync_n];
-set_property PACKAGE_PIN U15 [get_ports {vita_cam_data_p[0]}];
-set_property PACKAGE_PIN U16 [get_ports {vita_cam_data_n[0]}];
-set_property PACKAGE_PIN T21 [get_ports {vita_cam_data_p[1]}];
-set_property PACKAGE_PIN U21 [get_ports {vita_cam_data_n[1]}];
-set_property PACKAGE_PIN AA17 [get_ports {vita_cam_data_p[2]}];
-set_property PACKAGE_PIN AB17 [get_ports {vita_cam_data_n[2]}];
-set_property PACKAGE_PIN AB19 [get_ports {vita_cam_data_p[3]}];
-set_property PACKAGE_PIN AB20 [get_ports {vita_cam_data_n[3]}];
+set_property PACKAGE_PIN V22 [get_ports vita_cam_clk_pll]
+set_property PACKAGE_PIN AA18 [get_ports vita_cam_reset_n]
+set_property PACKAGE_PIN W22 [get_ports {vita_cam_trigger[2]}]
+set_property PACKAGE_PIN T22 [get_ports {vita_cam_trigger[1]}]
+set_property PACKAGE_PIN U22 [get_ports {vita_cam_trigger[0]}]
+set_property PACKAGE_PIN Y13 [get_ports {vita_cam_monitor[0]}]
+set_property PACKAGE_PIN AA13 [get_ports {vita_cam_monitor[1]}]
+set_property PACKAGE_PIN W15 [get_ports vita_spi_spi_sclk]
+set_property PACKAGE_PIN Y15 [get_ports vita_spi_spi_ssel_n]
+set_property PACKAGE_PIN Y14 [get_ports vita_spi_spi_mosi]
+set_property PACKAGE_PIN AA14 [get_ports vita_spi_spi_miso]
+set_property PACKAGE_PIN AA19 [get_ports vita_cam_clk_out_n]
+set_property PACKAGE_PIN Y21 [get_ports vita_cam_sync_n]
+set_property PACKAGE_PIN U16 [get_ports {vita_cam_data_n[0]}]
+set_property PACKAGE_PIN U21 [get_ports {vita_cam_data_n[1]}]
+set_property PACKAGE_PIN AB17 [get_ports {vita_cam_data_n[2]}]
+set_property PACKAGE_PIN AB20 [get_ports {vita_cam_data_n[3]}]
 #set_property PACKAGE_PIN V13 [get_ports {vita_cam_data_p[4]}];
 #set_property PACKAGE_PIN W13 [get_ports {vita_cam_data_n[4]}];
 #set_property PACKAGE_PIN U17 [get_ports {vita_cam_data_p[5]}];
@@ -138,5 +132,18 @@ set_property IOSTANDARD LVCMOS25 [get_ports vita_clk]
 create_clock -period 6.730 -name vita_clk [get_ports vita_clk]
 create_clock -period 2.692 -name vita_ser_clk [get_ports vita_cam_clk_out_p]
 
-set_clock_groups -asynchronous -group [get_clocks "clk_fpga_0" ] -group [get_clocks "clk_fpga_1 clk_fpga_2" ]  -group [get_clocks -include_generated_clocks "vita_clk vita_ser_clk" ]
+set_clock_groups -asynchronous -group [get_clocks clk_fpga_0] -group [get_clocks {clk_fpga_1 clk_fpga_2}] -group [get_clocks -include_generated_clocks {vita_clk vita_ser_clk}]
+
+
+
+# logic analyzer and debug pins
+#connect_debug_port u_ila_0_0/probe8 [get_nets [list {fcam_proj_bd_i/accelerator_arg_2_TDATA[0]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[1]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[2]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[3]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[4]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[5]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[6]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[7]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[8]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[9]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[10]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[11]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[12]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[13]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[14]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[15]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[16]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[17]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[18]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[19]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[20]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[21]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[22]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[23]}]]
+#connect_debug_port u_ila_0_0/probe26 [get_nets [list fcam_proj_bd_i/accelerator_arg_2_TLAST]]
+#connect_debug_port u_ila_0_0/probe27 [get_nets [list fcam_proj_bd_i/accelerator_arg_2_TREADY]]
+#connect_debug_port u_ila_0_0/probe28 [get_nets [list fcam_proj_bd_i/accelerator_arg_2_TVALID]]
+#connect_debug_port dbg_hub/clk [get_nets u_ila_0_processing_system7_0_FCLK_CLK0]
+
+
+#connect_debug_port u_ila_0_0/probe1 [get_nets [list fcam_proj_bd_i/s2mm_introut]]
+#connect_debug_port dbg_hub/clk [get_nets u_ila_0_processing_system7_0_FCLK_CLK0]
 
