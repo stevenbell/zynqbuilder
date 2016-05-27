@@ -25,7 +25,7 @@ const int debug_level = 4; // 0 is errors only, increasing numbers print more st
 // the same pool of memory?
 static int dev_open(struct inode *inode, struct file *file)
 {
-  TRACE("cmabuffer: dev_open");
+  TRACE("cmabuffer: dev_open\n");
   // Set up the image buffers; fail if it fails.
   if(init_buffers(cmabuf_dev) < 0){
     return(-ENOMEM);

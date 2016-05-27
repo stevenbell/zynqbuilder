@@ -20,7 +20,7 @@ extern const int debug_level; // This is defined in the including driver
 // Asking for smaller images just returns a whole large buffer, and asking
 // for a larger image fails.  A better solution would be to use a buddy
 // allocator and give out pieces that are only as large as necessary.
-#define N_BUFFERS 16
+#define N_BUFFERS 8
 #define BUFFER_SIZE (2048*1080*4) // This number must be a multiple of 4k pages so mmap works
 
 unsigned char free_flag[N_BUFFERS];
@@ -38,6 +38,7 @@ int init_buffers(struct device* dev)
   // For now, let's try and do this with the new-ish Linux Contiguous Memory
   // Allocator (CMA).
   // Boot-time parameter should be set in the devicetree: cma=100MB
+  printk("Allocating %d for CMA.\n", N_BUFFERS*BUFFER_SIZE);
   base_kern_addr = dma_alloc_coherent(dev, N_BUFFERS*BUFFER_SIZE,
                          (dma_addr_t*)&base_phys_addr, GFP_KERNEL);
   // TODO: make sure this is page-aligned so mmap works later

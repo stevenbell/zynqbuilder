@@ -43,7 +43,8 @@ int debug_level = 3; // 0 is errors only, increasing numbers print more stuff
 static int dev_open(struct inode *inode, struct file *file)
 {
   int i;
-  iowrite32(0x00010040, vdma_controller + 0x30); // Stop, so we can configure
+  unsigned long status;
+  iowrite32(0x00010044, vdma_controller + 0x30); // reset, so we can configure
 
   // Acquire buffers and hand them to the VDMA engine
   for(i = 0; i < N_VDMA_BUFFERS; i++){
@@ -56,14 +57,27 @@ static int dev_open(struct inode *inode, struct file *file)
 
   iowrite32(N_VDMA_BUFFERS, vdma_controller + 0x48); // Set number of buffers
 
-  // Run in circular mode, and keep interrupts off
-  iowrite32(0x00010043, vdma_controller + 0x30);
+  status = ioread32(vdma_controller + 0x34);
+  DEBUG("dev_open: ioread32 at offset 0x34 returned %08lx\n", status);
+  iowrite32(0xffffffff, vdma_controller + 0x34); // clear errors
+  DEBUG("dev_open: iowrite32 at offset 0x34 with %08x\n", 0xffffffff);
+  status = ioread32(vdma_controller + 0x34);
+  DEBUG("dev_open: ioread32 at offset 0x34 returned %08lx\n", status);
+
 
   iowrite32(1920, vdma_controller + 0xa4); // Horizontal size (1 byte/pixel)
-  iowrite32(0x800, vdma_controller + 0xa8); // Stride (1 byte/pixel)
+  iowrite32(2048, vdma_controller + 0xa8); // Stride (1 byte/pixel)
   iowrite32(1080, vdma_controller + 0xa0); // Vertical size, start transfer
 
-  TRACE("dev_open: Started VDMA\n");
+
+  // Run in circular mode, and keep interrupts off
+  iowrite32(0x00010043, vdma_controller + 0x30);
+  status = ioread32(vdma_controller + 0x30);
+  DEBUG("dev_open: ioread32 at offset 0x30 returned %08lx\n", status);
+  status = ioread32(vdma_controller + 0x34);
+  DEBUG("dev_open: ioread32 at offset 0x34 returned %08lx\n", status);
+
+  TRACE("dev_open: Started VDMA\n");;
   return(0);
 }
 
@@ -83,11 +97,12 @@ static int dev_close(struct inode *inode, struct file *file)
 int grab_image(Buffer* buf)
 {
   Buffer* tmp;
-  unsigned int slot; // Slot VDMA S2MM is working on
+  unsigned long slot; // Slot VDMA S2MM is working on
+  unsigned long status;
 
   // Allocate a new buffer to swap in
   tmp = acquire_buffer(1920, 1080, 1, 2048);
-  
+
   // If this fails, return failure
   if(tmp == NULL){
     return(-ENOBUFS);
@@ -95,11 +110,25 @@ int grab_image(Buffer* buf)
 
   // Grab the most recently completed image
   // The current frame store location is in 0x24 (FRMPTR_STS), bits 20-16
+  // Note 0x24 (FRMPTR_STS) is only available if C_ENABLE_DEBUG_INFO_12=1
   slot = ioread32(vdma_controller + 0x24);
+  DEBUG("grab_image: ioread32 at offset 0x24 returned %08lx\n", slot);
   slot = (slot & 0x001F0000) >> 16;
+  /*
+  // The current frame store location is in 0x28 (PARK_PTR_REG), bits 28-24
+  // Note 0x28 (PARK_PTR_REG) is only useful for our purpose
+  // if there is no VDMA error (see register 0x34)
+  status = ioread32(vdma_controller + 0x34);
+  DEBUG("grab_image: ioread32 at offset 0x34 returned %08lx\n", status);
+  slot = ioread32(vdma_controller + 0x28);
+  DEBUG("grab_image: ioread32 at offset 0x28 returned %08lx\n", slot);
+  slot = slot >> 24;
+  */
 
   // Get the previous one, which is the most recently finished
+  DEBUG("grab_image: VMDA current working frame in slot %lu\n", slot);
   slot = (slot + N_VDMA_BUFFERS - 1) % N_VDMA_BUFFERS;
+  DEBUG("grab_image: most recently finished frame in slot %lu\n", slot);
 
   // Copy the buffer object for the caller
   *buf = *vdma_buf[slot];
