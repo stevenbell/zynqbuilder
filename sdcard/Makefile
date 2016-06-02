@@ -1,8 +1,7 @@
 # These parameters are defaults and should usually be overriden, e.g.,
 #   make SDCARD_DIR=/YOUR/PATH/HERE copy
 SDCARD_DIR=/media/steven/2E9F-3602
-PROJECT_DIR=/nobackup/jingpu/zynqbuilder/vivado_project/work_new
-#PROJECT_DIR=/nobackup/jingpu/zynqbuilder/vivado_project/demo_two_input
+PROJECT_DIR=/nobackup/jingpu/zynqbuilder/vivado_project/my_work
 
 # These are defaults which match the zynqbuilder vivado project.
 # You shouldn't have to change these.
@@ -27,8 +26,9 @@ copy: all
 	cp $(STAGING_DIR)/* $(SDCARD_DIR)
 
 clean:
-	rm -r $(STAGING_DIR)/*
-	rm -r $(EXPORT_DIR)/*
+	rm -rf $(STAGING_DIR)/*
+	rm -rf $(EXPORT_DIR)/*
+	rm -f devicetree/devicetree.dts
 
 cleansd:
 	rm -r $(SDCARD_DIR)/*

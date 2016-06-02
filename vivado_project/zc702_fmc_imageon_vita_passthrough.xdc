@@ -135,15 +135,3 @@ create_clock -period 2.692 -name vita_ser_clk [get_ports vita_cam_clk_out_p]
 set_clock_groups -asynchronous -group [get_clocks clk_fpga_0] -group [get_clocks {clk_fpga_1 clk_fpga_2}] -group [get_clocks -include_generated_clocks {vita_clk vita_ser_clk}]
 
 
-
-# logic analyzer and debug pins
-#connect_debug_port u_ila_0_0/probe8 [get_nets [list {fcam_proj_bd_i/accelerator_arg_2_TDATA[0]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[1]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[2]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[3]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[4]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[5]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[6]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[7]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[8]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[9]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[10]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[11]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[12]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[13]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[14]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[15]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[16]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[17]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[18]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[19]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[20]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[21]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[22]} {fcam_proj_bd_i/accelerator_arg_2_TDATA[23]}]]
-#connect_debug_port u_ila_0_0/probe26 [get_nets [list fcam_proj_bd_i/accelerator_arg_2_TLAST]]
-#connect_debug_port u_ila_0_0/probe27 [get_nets [list fcam_proj_bd_i/accelerator_arg_2_TREADY]]
-#connect_debug_port u_ila_0_0/probe28 [get_nets [list fcam_proj_bd_i/accelerator_arg_2_TVALID]]
-#connect_debug_port dbg_hub/clk [get_nets u_ila_0_processing_system7_0_FCLK_CLK0]
-
-
-#connect_debug_port u_ila_0_0/probe1 [get_nets [list fcam_proj_bd_i/s2mm_introut]]
-#connect_debug_port dbg_hub/clk [get_nets u_ila_0_processing_system7_0_FCLK_CLK0]
-
