@@ -18,6 +18,8 @@
 #include <linux/slab.h> // kmalloc
 #include <asm/io.h> // ioremap and friends
 #include <asm/uaccess.h> // Copy to/from userspace pointers
+#include <asm/cacheflush.h> // flush L1 cache
+#include <asm/outercache.h> // flush L2 cache
 #include <linux/sched.h> // current task struct
 #include <linux/fs.h> // File node numbers
 #include <linux/device.h>
@@ -152,15 +154,13 @@ int check_dma_engine(unsigned char* dma_controller)
     while(ioread32((void*)dma_controller + 0x00) & 0x00000004) {}
   }
 
-  if (use_acp) {
-    // setup SG_CTL register
-    // SG_CACHE: 1111 defines memory type as 'write-back read and write-allocate'
-    // SG_USER: tie off high to enable coherency when allowed by SG_CACHE
-    iowrite32(0x00000f0f, (void*)dma_controller + 0x2c);
-
-    // Note that S2MM and MM2S share the same SG_CTL, so the write w.r.t the
-    // output DMA is unnecessary, but the out-of-range write looks fine
-  }
+  // setup SG_CTL register
+  // SG_CACHE: 1111 defines memory type as 'write-back read and write-allocate'
+  // SG_USER: tie off high to enable coherency when allowed by SG_CACHE
+  //
+  // Note that S2MM and MM2S share the same SG_CTL, so the write w.r.t the
+  // output DMA is unnecessary, but the out-of-range write looks fine
+  iowrite32(0x00000f0f, (void*)dma_controller + 0x2c);
   return(0);
 }
 
@@ -242,11 +242,8 @@ void build_sg_chain(const Buffer buf, unsigned long* sg_ptr_base, unsigned long*
 
   // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
   // regardless of the data direction.
-  if (use_acp) {
-    *sg_phys = virt_to_phys(sg_ptr_base);
-  } else {
-    *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
-  }
+  *sg_phys = virt_to_phys(sg_ptr_base);
+  //*sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * buf.height, DMA_TO_DEVICE);
 }
 
 // Use 2-D transfer feature in Xilinx AXI DMA.
@@ -289,12 +286,9 @@ void build_sg_chain_2D(const Buffer buf, unsigned long* sg_ptr_base, unsigned lo
 
   // This is always mapped DMA_TO_DEVICE, since the DMA engine is reading the SG table
   // regardless of the data direction.
-  if (use_acp) {
-    *sg_phys = virt_to_phys(sg_ptr_base);
-  } else {
-    TRACE("build_sg_chain_2D: call dma_map_single()\n");
-    *sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * 1, DMA_TO_DEVICE);
-  }
+  *sg_phys = virt_to_phys(sg_ptr_base);
+  //TRACE("build_sg_chain_2D: call dma_map_single()\n");
+  //*sg_phys = dma_map_single(pipe_dev, sg_ptr_base, SG_DESC_BYTES * 1, DMA_TO_DEVICE);
 }
 
 /* Sets up a buffer for processing through the stencil path.  This drops the
@@ -341,9 +335,12 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
                    src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_TO_DEVICE);
 % endfor
 % for s in outstreams:
-    dma_map_single(pipe_dev, src->${s}.kern_addr,
-                   src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
+    //dma_map_single(pipe_dev, src->${s}.kern_addr,
+    //               src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
 % endfor
+    //flush_cache_all(); // flush l1 cache
+    //outer_flush_all(); // flush l2 cache, kernel dump "bus error"
+    TRACE("process_image: dma_map_single() finished.\n");
   }
 
   // Now throw this whole thing into the queue.
@@ -417,24 +414,23 @@ void dma_finished_work(struct work_struct* ws)
     DEBUG("dma_finished_work: buf: %lx\n", (unsigned long)buf);
 
     // Unmap each of the SG buffers
-    if (!use_acp) {
 % for s in streamNames:
-      dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
+    //dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
 % endfor
-    }
 
     // Unmap all the input and output buffers (with appropriate direction)
     // For the source buffers, this should do nothing.  For the result buffers,
     // it should cause a cache invalidate.
     if (!use_acp) {
 % for s in instreams:
-    dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-                     buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
+      //dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
+      //buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
 % endfor
 % for s in outstreams:
-    dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-                     buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
+      //dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
+      //buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
 % endfor
+    TRACE("dma_finished_work: dma_unmap_single() finished.\n");
     }
 
     buffer_enqueue(&complete_list, buf);

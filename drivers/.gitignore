@@ -2,6 +2,11 @@
 *.o
 *.ko
 
+# temporaries for building linux kernel modules
+*.mod.c
+Module.symvers
+modules.order
+
 # generated file by drivergen.py
 driver.c
 dma_bufferset.h
