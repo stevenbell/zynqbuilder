@@ -64,12 +64,6 @@ static int dev_open(struct inode *inode, struct file *file)
   status = ioread32(vdma_controller + 0x34);
   DEBUG("dev_open: ioread32 at offset 0x34 returned %08lx\n", status);
 
-
-  iowrite32(1920, vdma_controller + 0xa4); // Horizontal size (1 byte/pixel)
-  iowrite32(2048, vdma_controller + 0xa8); // Stride (1 byte/pixel)
-  iowrite32(1080, vdma_controller + 0xa0); // Vertical size, start transfer
-
-
   // Run in circular mode, and keep interrupts off
   iowrite32(0x00010043, vdma_controller + 0x30);
   status = ioread32(vdma_controller + 0x30);
@@ -77,7 +71,12 @@ static int dev_open(struct inode *inode, struct file *file)
   status = ioread32(vdma_controller + 0x34);
   DEBUG("dev_open: ioread32 at offset 0x34 returned %08lx\n", status);
 
-  TRACE("dev_open: Started VDMA\n");;
+  // Write the size.  This also commits the settings and begins transfer
+  iowrite32(1920, vdma_controller + 0xa4); // Horizontal size (1 byte/pixel)
+  iowrite32(2048, vdma_controller + 0xa8); // Stride (1 byte/pixel)
+  iowrite32(1080, vdma_controller + 0xa0); // Vertical size, start transfer
+
+  TRACE("dev_open: Started VDMA\n");
   return(0);
 }
 
