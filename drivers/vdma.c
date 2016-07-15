@@ -82,11 +82,12 @@ static int dev_open(struct inode *inode, struct file *file)
 
 static int dev_close(struct inode *inode, struct file *file)
 {
+  int i;
   iowrite32(0x00010040, vdma_controller + 0x30); // Stop, so we can configure
   // Free our collection of big buffers
-  // for(i = 0; i < N_VDMA_BUFFERS; i++){
-  //   release_buffer(vdma_buf[i]);
-  // }
+  for(i = 0; i < N_VDMA_BUFFERS; i++){
+    release_buffer(vdma_buf[i]);
+  }
 
   TRACE("dev_close: Stopped VDMA\n");
   return(0);
