@@ -51,8 +51,9 @@ MODULE_LICENSE("GPL");
 #define ${s.upper()}_DMA_CONTROLLER_SIZE 0x30
 % endfor
 
-#define DPDA_CONTROLLER_BASE ${baseaddr}
-#define DPDA_CONTROLLER_SIZE ${regwidth}
+#define ACC_CONTROLLER_BASE ${baseaddr}
+#define ACC_CONTROLLER_SIZE ${regwidth}
+#define ACC_CONTROLLER_PAGES ${(int(regwidth, 0) / 1024) + 1}
 
 // Hardware address pointers from ioremap
 // We do byte-wise pointer arithmetic on these, so use uchar
@@ -537,12 +538,30 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   return(0); // Success
 }
 
+int dev_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+  unsigned long off, physical, vsize;
+  TRACE("dev_mmap\n");
+  off = vma->vm_pgoff << PAGE_SHIFT; // Requested offset (in bytes)
+  physical = ACC_CONTROLLER_BASE + off; // Physical address
+  vsize = vma->vm_end - vma->vm_start; // Requested virtual size (in bytes)
+
+  // Check that the user isn't asking to map too much (or too high)
+  if(vsize > (ACC_CONTROLLER_PAGES << PAGE_SHIFT) - off){
+    return -EINVAL;
+  }
+
+  remap_pfn_range(vma, vma->vm_start, physical, vsize, vma->vm_page_prot);
+
+  return 0;
+}
 
 struct file_operations fops = {
   // No read/write; everything is handled by ioctl and mmap
   .open = dev_open,
   .release = dev_close,
   .unlocked_ioctl = dev_ioctl,
+  .mmap = dev_mmap,
 };
 
 static int hwacc_probe(struct platform_device *pdev)
@@ -584,7 +603,7 @@ static int hwacc_probe(struct platform_device *pdev)
   ${s}_dma_controller = ioremap(${s.upper()}_DMA_CONTROLLER_BASE, ${s.upper()}_DMA_CONTROLLER_SIZE);
 % endfor
 
-  acc_controller = ioremap(DPDA_CONTROLLER_BASE, DPDA_CONTROLLER_SIZE);
+  acc_controller = ioremap(ACC_CONTROLLER_BASE, ACC_CONTROLLER_SIZE);
   if(${" || ".join([s + "_dma_controller == NULL" for s in streamNames])}
     || acc_controller == NULL){
     ERROR("ioremap failed for one or more devices!\n");
