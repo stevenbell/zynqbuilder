@@ -45,6 +45,9 @@ proc mkproject { projectName projectPath ip_path build_camera} {
     #Get ablosute path to HLS
     set hls_repo [file normalize $ip_path]
     set ip_vlnv [exec python $get_ip_info $hls_repo "VLNV"]
+    # TODO: This only handles single-input kernels
+    set axis_input_name [string trim [exec python $get_ip_info $hls_repo "axis_input"] \[\]\' ]
+    set axis_output_name [exec python $get_ip_info $hls_repo "axis_output"]
 
     puts "Creating project $projectName in $projectPath"
     puts "IP core VLNV: $ip_vlnv"
@@ -86,7 +89,7 @@ proc mkproject { projectName projectPath ip_path build_camera} {
 }
 
 # Procedure to create entire design
-proc create_root_design { ip_vlnv build_camera} {
+proc create_root_design { ip_vlnv build_camera axis_input_name axis_output_name} {
     puts "***** Creating Block Design..."
 
     set rootCell  [get_bd_cells /]
@@ -122,9 +125,9 @@ proc create_root_design { ip_vlnv build_camera} {
     set_property -dict [list CONFIG.M_TDATA_NUM_BYTES {4} CONFIG.HAS_TLAST {1} CONFIG.HAS_MI_TKEEP {1}] $out_width_converter
 
     # Connect accelerator input/output streams
-    connect_bd_intf_net [get_bd_intf_pins axis_dwidth_converter_0/S_AXIS] [get_bd_intf_pins accelerator/arg_0]
+    connect_bd_intf_net [get_bd_intf_pins axis_dwidth_converter_0/S_AXIS] [get_bd_intf_pins accelerator/$axis_output_name]
     connect_bd_intf_net [get_bd_intf_pins axis_dwidth_converter_0/M_AXIS] [get_bd_intf_pins axi_dma_1/S_AXIS_S2MM]
-    connect_bd_intf_net [get_bd_intf_pins accelerator/arg_1] [get_bd_intf_pins axi_dma_1/M_AXIS_MM2S]
+    connect_bd_intf_net [get_bd_intf_pins accelerator/$axis_input_name] [get_bd_intf_pins axi_dma_1/M_AXIS_MM2S]
     connect_bd_net [get_bd_pins axis_dwidth_converter_0/aclk] [get_bd_pins axi_dma_1/m_axi_s2mm_aclk]
     connect_bd_net [get_bd_pins axis_dwidth_converter_0/aresetn] [get_bd_pins axi_dma_1/axi_resetn]
 

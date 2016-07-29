@@ -7,13 +7,15 @@
 #  2 February 2016
 
 import xml.etree.ElementTree
+import sys
+from IPython import embed
 
 if __name__ == "__main__":
-    import sys
     IP_PATH = "."
     option = ""
     if len(sys.argv) < 2:
-        print "Usage: python get_component_info.py IP_PATH [VLNV|clock|reset|interrupt|aximm|axis|axis_const|axis_output]"
+        print "Usage: python get_component_info.py IP_PATH [VLNV|clock|reset|interrupt|aximm|axis_input|axis_output]"
+        print "IP_PATH should be a directory containing component.xml"
         exit(-1)
     else:
         IP_PATH = sys.argv[1]
@@ -31,7 +33,7 @@ if __name__ == "__main__":
     name    = root.find(spirit +"name").text
     version = root.find(spirit +"version").text
 
-    VLNV = "%s:%s:%s:%s"%(vendor, library, name,version)
+    VLNV = "%s:%s:%s:%s"%(vendor, library, name, version)
 
     bif = root.find(spirit+"busInterfaces")
 
@@ -39,9 +41,8 @@ if __name__ == "__main__":
     reset       = None #One reset
     interrupt   = None #One interrupt
     aximm       = None #Assume a single AXIMM buses
-    axis_const  = None #AXIS bus with "constant" in the name
     axis_output = None #AXIS bus with "output" in the name
-    axis        = []   #Can have many AXIS buses
+    axis_input  = []   #Can have many AXIS input buses
 
     for bus in bif.findall(spirit+"busInterface"):
         n = bus.find(spirit+"name").text
@@ -55,11 +56,10 @@ if __name__ == "__main__":
         elif b == "aximm":
             aximm = n
         elif b == "axis":
-            axis.append(n)
-            if n.find("constant") >= 0:
-                axis_const = n
-            elif n.find("output") >= 0:
-                axis_output = n
+            if bus.find(spirit+"master") is not None:
+              axis_output = n
+            elif bus.find(spirit+"slave") is not None:
+              axis_input.append(n)
 
     if option == "":
         print "VLNV       : ", VLNV
@@ -67,8 +67,7 @@ if __name__ == "__main__":
         print "reset      : ", reset
         print "interrupt  : ", interrupt
         print "aximm      : ", aximm
-        print "axis       : ", axis
-        print "axis_const : ", axis_const
+        print "axis_input : ", axis_input
         print "axis_output: ", axis_output
     else:
         exec("print %s"%option)
