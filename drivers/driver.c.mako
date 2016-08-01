@@ -540,20 +540,19 @@ long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 int dev_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-  unsigned long off, physical, vsize;
-  TRACE("dev_mmap\n");
-  off = vma->vm_pgoff << PAGE_SHIFT; // Requested offset (in bytes)
-  physical = ACC_CONTROLLER_BASE + off; // Physical address
+  unsigned long physical_pfn, vsize;
+  physical_pfn = (ACC_CONTROLLER_BASE >> PAGE_SHIFT) + vma->vm_pgoff; // Physical page
   vsize = vma->vm_end - vma->vm_start; // Requested virtual size (in bytes)
 
   // Check that the user isn't asking to map too much (or too high)
-  if(vsize > (ACC_CONTROLLER_PAGES << PAGE_SHIFT) - off){
+  if(vsize > ((ACC_CONTROLLER_PAGES - vma->vm_pgoff) << PAGE_SHIFT)){
     return -EINVAL;
   }
 
-  remap_pfn_range(vma, vma->vm_start, physical, vsize, vma->vm_page_prot);
+  io_remap_pfn_range(vma, vma->vm_start, physical_pfn, vsize, vma->vm_page_prot);
 
-  return 0;
+  TRACE("dev_mmap virt: %lx, phys: %lx, size: %lx\n", vma->vm_start, physical_pfn << PAGE_SHIFT, vsize);
+  return(0);
 }
 
 struct file_operations fops = {
