@@ -4,9 +4,9 @@
 # Base address of the accelerator
 baseaddr: "0x43c10000"
 # Size of the accelerator register space, bytes
-regwidth: "0x13"
-# Size of the tap register space, bytes
-tapwidth: "0x10"
+regwidth: "0x1a4"
+# Interrupt for the VDMA (xilcam) engine
+vdma_irq: 63
 
 registers:
   run: "0x00"
@@ -14,16 +14,16 @@ registers:
 instreams:
   input0:
     dma_addr: "0x40400000"
-    width: 1454
-    height: 974
+    width: 264
+    height: 264
     irq: 61
 
 
 outstreams:
   output:
     dma_addr: "0x40400030"
-    width: 720
-    height: 480
+    width: 256
+    height: 256
     irq: 62
 
 

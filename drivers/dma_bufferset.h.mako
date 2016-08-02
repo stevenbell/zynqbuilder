@@ -17,7 +17,7 @@ typedef struct BufferSet {
   unsigned long ${s}_sg_phys; // Physical address of SG table
 % endfor
   // TODO: what if the tap width is zero?
-  unsigned char tap_vals[${tapwidth}]; // Data that describes the tap state
+  //unsigned char tap_vals[$//{tapwidth}]; // Data that describes the tap state
   struct BufferSet* next; // Next buffer set in chain, if any
 } BufferSet;
 

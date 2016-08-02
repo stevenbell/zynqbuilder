@@ -15,6 +15,8 @@
 #include <linux/sched.h> // current task struct
 #include <linux/fs.h> // File node numbers
 #include <linux/device.h>
+#include <linux/interrupt.h>
+#include <linux/of_platform.h>
 
 #include "common.h"
 #include "buffer.h"
@@ -27,6 +29,12 @@ MODULE_LICENSE("GPL");
 
 #define VDMA_CONTROLLER_BASE 0x43000000
 #define VDMA_CONTROLLER_SIZE 0x100
+
+// Wait queue to pend on a frame finishing.  Threads waiting on this are
+// woken up each time a frame is finished and an interrupt occurs.
+DECLARE_WAIT_QUEUE_HEAD(wq_frame);
+
+atomic_t new_frame; // Whether we have a new (unread) output frame or not
 
 unsigned char* vdma_controller;
 
@@ -64,8 +72,8 @@ static int dev_open(struct inode *inode, struct file *file)
   status = ioread32(vdma_controller + 0x34);
   DEBUG("dev_open: ioread32 at offset 0x34 returned %08lx\n", status);
 
-  // Run in circular mode, and keep interrupts off
-  iowrite32(0x00010043, vdma_controller + 0x30);
+  // Run in circular mode, and turn on only the frame complete interrupt
+  iowrite32(0x00011043, vdma_controller + 0x30);
   status = ioread32(vdma_controller + 0x30);
   DEBUG("dev_open: ioread32 at offset 0x30 returned %08lx\n", status);
   status = ioread32(vdma_controller + 0x34);
@@ -98,7 +106,11 @@ int grab_image(Buffer* buf)
 {
   Buffer* tmp;
   unsigned long slot; // Slot VDMA S2MM is working on
-  unsigned long status;
+  //unsigned long status; // For printing debug messages
+
+  // Wait until there's a new image
+  wait_event_interruptible(wq_frame, atomic_read(&new_frame) == 1);
+  atomic_set(&new_frame, 0); // Mark the image as read
 
   // Allocate a new buffer to swap in
   tmp = acquire_buffer(1920, 1080, 1, 2048);
@@ -182,9 +194,33 @@ struct file_operations fops = {
   .unlocked_ioctl = dev_ioctl,
 };
 
-
-static int vdma_driver_init(void)
+// Interrupt handler for when a frame finishes
+irqreturn_t frame_finished_handler(int irq, void* dev_id)
 {
+  iowrite32(0x00001000, vdma_controller + 0x34); // Acknowledge/clear interrupt
+  // TODO: reset the frame count back to 1?
+  //e.g., iowrite32(0x00011043, vdma_controller + 0x30);
+
+  // TODO: get the current time and save it somewhere
+  // Should be able to use do_gettimeofday()
+  atomic_set(&new_frame, 1);
+  wake_up_interruptible(&wq_frame);
+  DEBUG("irq: VDMA frame finished.\n");
+  return(IRQ_HANDLED);
+}
+
+static int vdma_probe(struct platform_device *pdev)
+{
+  int irqok;
+  struct resource* r_irq = NULL;
+  // Register the IRQ
+  r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+  if(r_irq == NULL){
+    ERROR("IRQ lookup failed.  Check the device tree.\n");
+  }
+  TRACE("IRQ number is %d\n", r_irq->start);
+  irqok = request_irq(r_irq->start, frame_finished_handler, 0, "xilcam", NULL);
+
   // Get a single character device number
   alloc_chrdev_region(&device_num, 0, 1, DEVNAME);
   DEBUG("VDMA device registered with major %d, minor: %d\n", MAJOR(device_num), MINOR(device_num));
@@ -212,16 +248,38 @@ static int vdma_driver_init(void)
   return(0);
 }
 
-static void vdma_driver_exit(void)
+static int vdma_remove(struct platform_device *pdev)
 {
+  struct resource* r_irq = NULL;
+  // Release the IRQ line
+  r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+  if(r_irq == NULL){
+    ERROR("IRQ lookup failed on release.  Check the device tree.\n");
+  }
+  free_irq(r_irq->start, NULL);
+
   device_unregister(vdma_dev);
   class_destroy(vdma_class);
   cdev_del(chardev);
   unregister_chrdev_region(device_num, 1);
 
   iounmap(vdma_controller);
+  return(0);
 }
 
-module_init(vdma_driver_init);
-module_exit(vdma_driver_exit);
+static struct of_device_id vdma_of_match[] = {
+  { .compatible = "xilcam", },
+  {}
+};
+
+static struct platform_driver vdma_driver = {
+	.driver = {
+		.name = "xilcam",
+		.of_match_table = vdma_of_match,
+	},
+	.probe = vdma_probe,
+	.remove = vdma_remove,
+};
+
+module_platform_driver(vdma_driver)
 

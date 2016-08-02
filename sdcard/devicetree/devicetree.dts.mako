@@ -3,6 +3,7 @@
 // - Changed root device to /dev/mmcblk0p2
 // - Added cma boot parameter
 // - Added hwacc with interrupts
+// - Added xilcam with interrupt
 /dts-v1/;
 
 / {
@@ -78,8 +79,15 @@
 
     hwacc@43c10000 {
       compatible = "hwacc";
-			reg = <0x43c10000 0x20>;
+			reg = <0x43c10000 0x100>;
       interrupts = ${', '.join(['<0 %d 4>' % (irq-32) for irq in irqlist])};
+			interrupt-parent = <0x3>;
+    };
+
+    xilcam@43000000 {
+      compatible = "xilcam";
+      reg = <0x43000000 0x20>;
+      interrupts = ${'<0 %d 4>' % (vdma_irq-32)};
 			interrupt-parent = <0x3>;
     };
 
