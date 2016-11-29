@@ -1,7 +1,8 @@
 # These parameters are defaults and should usually be overriden, e.g.,
 #   make SDCARD_DIR=/YOUR/PATH/HERE copy
 SDCARD_DIR=/media/steven/2E9F-3602
-PROJECT_DIR=/nobackup/jingpu/zynqbuilder/vivado_project/my_work
+#PROJECT_DIR=/nobackup/jingpu/zynqbuilder/vivado_project/my_work
+PROJECT_DIR=/nobackup/jingpu/Zynq_PCIe_TRD/xapp1171/project_1
 
 # These are defaults which match the zynqbuilder vivado project.
 # You shouldn't have to change these.
@@ -60,7 +61,7 @@ ps7_init.c system.bit: $(SYSDEF)
 	unzip -o $(SYSDEF) -d $(EXPORT_DIR)
 
 # TODO: depends on u-boot
-bootimage: fsbl.elf system.bit
+bootimage: system.bit
 	mkdir -p $(BOOTIMAGE_DIR)
 	# Boot image configuration file
 	cp bootimage.bif $(BOOTIMAGE_DIR)

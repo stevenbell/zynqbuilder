@@ -1,0 +1,402 @@
+<?xml version="1.0"?>
+<Index Version="1" Minor="0">
+	<Repository value="/nobackup/jingpu/Zynq_7z100/mmp_pcie/ip_package">
+	</Repository>
+	<IP>
+		<VLNV value="logicbricks.com:logicbricks:logicvc:5.0">
+		</VLNV>
+		<DisplayName value="Multilayer Video Controller">
+		</DisplayName>
+		<Description value="The logiCVC-ML IP core is an advanced display graphic controller that enables an easy video and graphics integration into embedded systems with the Xilinx Zynq-7000 AP SoC and FPGAs. It can be used as a standalone graphics IP core, or as a part of larger graphics systems along other Xylon logicBRICKS IP cores. The logiCVC-ML is a real plug-and-play IP core, supported by the Xilinx Vivado IP Integrator (IPI) integrated software solution, and designers familiar with this tool can immediately start designing. The IP&apos;s size and feature set can be easily adjusted through IP drag and drop IPI interface. The logiCVC-ML comes readya-to-use and with rich set of deliverables including SW driver, documentation and an example design. Higher resolutions are available on request. Currently Xylon offers software drivers for use with Linux, Android and Microsoft Windows Embedded Compact operating systems.">
+		</Description>
+		<ProductGuide value="doc/logiCVC-ML_hum_v5.0.1.pdf">
+		</ProductGuide>
+		<VersionInfo value="doc/RevisionLog.txt">
+		</VersionInfo>
+		<CoreRevision value="1">
+		</CoreRevision>
+		<ComponentPath value="logicvc_v5_0_1/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="aartix7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="artix7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="artix7l">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="azynq">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="kintex7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="kintex7l">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qartix7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qkintex7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qkintex7l">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qvirtex7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qzynq">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="virtex7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/Video_&amp;_Image_Processing">
+			</Taxonomy>
+			<Taxonomy value="/Alliance_Partners/Xylon">
+			</Taxonomy>
+		</Taxonomies>
+		<LockPrevVersions value="false">
+		</LockPrevVersions>
+		<Interfaces>
+			<Interface value="AXI4">
+			</Interface>
+			<Interface value="AXI4-Stream">
+			</Interface>
+		</Interfaces>
+		<VendorDisplayName value="Xylon">
+		</VendorDisplayName>
+		<VendorURL value="http://www.logicbricks.com/Products/logiCVC-ML.aspx">
+		</VendorURL>
+	</IP>
+	<IP>
+		<VLNV value="nwlogic.com:ip:NWL_AXI_DMA:1.01">
+		</VLNV>
+		<DisplayName value="NWL_AXI_DMA_v1.01">
+		</DisplayName>
+		<Description value="Northwest Logic AXI DMA">
+		</Description>
+		<CoreRevision value="3">
+		</CoreRevision>
+		<ComponentPath value="Xilinx_zynq_x4_gen2_trd_1_01_01062015/nwl_ip/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BASEIP">
+			</Taxonomy>
+		</Taxonomies>
+		<LockPrevVersions value="false">
+		</LockPrevVersions>
+		<Interfaces>
+			<Interface value="AXI4">
+			</Interface>
+			<Interface value="AXI4-Stream">
+			</Interface>
+		</Interfaces>
+	</IP>
+	<IP>
+		<VLNV value="nwlogic.com:ip:NWL_AXI_Ref_Des:1.01">
+		</VLNV>
+		<DisplayName value="NWL_AXI_Ref_Des_v1.01">
+		</DisplayName>
+		<Description value="Northwest Logic AXI Reference Design">
+		</Description>
+		<CoreRevision value="1">
+		</CoreRevision>
+		<ComponentPath value="Xilinx_zynq_x4_gen2_trd_1_01_01062015/route/nwl_refdes_ip/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BASEIP">
+			</Taxonomy>
+		</Taxonomies>
+		<LockPrevVersions value="false">
+		</LockPrevVersions>
+		<Interfaces>
+			<Interface value="AXI4">
+			</Interface>
+		</Interfaces>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:user:raw_data_packet:1.0">
+		</VLNV>
+		<DisplayName value="raw_data_packet_v1_0">
+		</DisplayName>
+		<Description value="raw_data_packet_v1_0">
+		</Description>
+		<CoreRevision value="1">
+		</CoreRevision>
+		<ComponentPath value="raw_data_packet_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<UpgradesFrom>
+			<Upgrade value="xilinx.com:ip:raw_data_packet:1.0">
+			</Upgrade>
+		</UpgradesFrom>
+		<Interfaces>
+			<Interface value="AXI4-Stream">
+			</Interface>
+		</Interfaces>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:user:axi_shim:1.0">
+		</VLNV>
+		<DisplayName value="axi_shim_v1_0">
+		</DisplayName>
+		<Description value="axi_shim_v1_0">
+		</Description>
+		<CoreRevision value="2">
+		</CoreRevision>
+		<ComponentPath value="axi_shim_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<UpgradesFrom>
+			<Upgrade value="xilinx.com:ip:axi_shim:1.0">
+			</Upgrade>
+		</UpgradesFrom>
+		<Interfaces>
+			<Interface value="AXI4">
+			</Interface>
+		</Interfaces>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:user:pcie_perf_mon:1.0">
+		</VLNV>
+		<DisplayName value="pcie_perf_mon_v1_0">
+		</DisplayName>
+		<Description value="pcie_perf_mon_v1_0">
+		</Description>
+		<CoreRevision value="3">
+		</CoreRevision>
+		<ComponentPath value="pcie_perf_mon_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<UpgradesFrom>
+			<Upgrade value="xilinx.com:ip:pcie_perf_mon:1.0">
+			</Upgrade>
+		</UpgradesFrom>
+		<Interfaces>
+			<Interface value="AXI4-Stream">
+			</Interface>
+		</Interfaces>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:user:led_ctrl:1.0">
+		</VLNV>
+		<DisplayName value="led_ctrl_v1_0">
+		</DisplayName>
+		<Description value="led_ctrl_v1_0">
+		</Description>
+		<CoreRevision value="1">
+		</CoreRevision>
+		<ComponentPath value="led_ctrl_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<UpgradesFrom>
+			<Upgrade value="xilinx.com:ip:led_ctrl:1.0">
+			</Upgrade>
+		</UpgradesFrom>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:user:user_registers_slave:1.0">
+		</VLNV>
+		<DisplayName value="user_registers_slave_v1_0">
+		</DisplayName>
+		<Description value="user_registers_slave_v1_0">
+		</Description>
+		<CoreRevision value="4">
+		</CoreRevision>
+		<ComponentPath value="user_registers_slave_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<UpgradesFrom>
+			<Upgrade value="xilinx.com:ip:user_registers_slave:1.0">
+			</Upgrade>
+		</UpgradesFrom>
+		<Interfaces>
+			<Interface value="AXI4">
+			</Interface>
+		</Interfaces>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:user:util_flipflop:1.0">
+		</VLNV>
+		<DisplayName value="util_flipflop_v1_0">
+		</DisplayName>
+		<Description value="util_flipflop_v1_0">
+		</Description>
+		<ComponentPath value="util_flipflop_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="aartix7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="artix7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="artix7l">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="azynq">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="kintex7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="kintex7l">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qartix7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qartix7l">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qkintex7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qkintex7l">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qvirtex7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="qzynq">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="virtex7">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+			<Family name="zynq">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<VendorURL value="http://www.xilinx.com">
+		</VendorURL>
+	</IP>
+	<IP>
+		<VLNV value="xilinx.com:hls:sobel_filter:1.0">
+		</VLNV>
+		<DisplayName value="Sobel_filter">
+		</DisplayName>
+		<Description value="An IP generated by Vivado HLS">
+		</Description>
+		<ComponentPath value="sobel_filter_v1_0/component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="zynq">
+				<Part status="Pre-Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/VIVADO_HLS_IP">
+			</Taxonomy>
+		</Taxonomies>
+		<Interfaces>
+			<Interface value="AXI4">
+			</Interface>
+			<Interface value="AXI4-Stream">
+			</Interface>
+		</Interfaces>
+		<Documents>
+			<Document value="doc/ReleaseNotes.txt" displayName="ReleaseNotes.txt" fileType="Text file">
+			</Document>
+		</Documents>
+	</IP>
+</Index>
+

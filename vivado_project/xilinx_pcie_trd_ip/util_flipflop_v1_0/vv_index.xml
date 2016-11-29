@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<Index Version="1" Minor="0">
+	<Repository value="/proj/emb_apps/keshava/zynq/IPI/IP_Rep/utility">
+	</Repository>
+	<IP>
+		<VLNV value="xilinx.com:user:util_flipflop:1.0">
+		</VLNV>
+		<DisplayName value="util_flipflop_v1_0">
+		</DisplayName>
+		<Description value="util_flipflop_v1_0">
+		</Description>
+		<SupportsRdiCustomization value="true">
+		</SupportsRdiCustomization>
+		<SupportsRdiGeneration value="true">
+		</SupportsRdiGeneration>
+		<NativeOnly value="true">
+		</NativeOnly>
+		<ComponentPath value="component.xml">
+		</ComponentPath>
+		<Families>
+			<Family name="kintex7">
+				<Part status="Production" name="ALL">
+				</Part>
+			</Family>
+		</Families>
+		<Taxonomies>
+			<Taxonomy value="/BaseIP">
+			</Taxonomy>
+		</Taxonomies>
+		<VendorURL value="http://www.xilinx.com">
+		</VendorURL>
+	</IP>
+</Index>
+

@@ -74,7 +74,7 @@ proc mkproject { projectName projectPath ip_path build_camera} {
     create_bd_design $bd_name
 
     # Populate the block design
-    create_root_design $ip_vlnv $build_camera
+    create_root_design $ip_vlnv $build_camera $axis_input_name $axis_output_name
 
     # Add Project source files
     puts "***** Adding Source Files to Block Design..."
