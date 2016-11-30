@@ -72,10 +72,10 @@ proc mkproject { projectName projectPath ip_path build_camera build_pcie} {
     # Add board specific constraint file
     set_property board_part em.avnet.com:mini_module_plus_7z100_rev_c:part0:1.0 [current_project]
     if { $build_camera } {
-        add_files -norecurse -fileset constrs_1 $fmc_constraints
+        import_files -norecurse -fileset constrs_1 $fmc_constraints
     }
     if { $build_pcie } {
-        add_files -norecurse -fileset constrs_1 $pcie_constraints
+        import_files -norecurse -fileset constrs_1 $pcie_constraints
     }
 
     # Add Avnet IP Repository
@@ -94,7 +94,7 @@ proc mkproject { projectName projectPath ip_path build_camera build_pcie} {
     puts "***** Adding Source Files to Block Design..."
     if { $build_pcie } {
         if { $build_camera } {
-            add_files -fileset sources_1 -norecurse $top_wrapper_pcie
+            import_files -fileset sources_1 -norecurse $top_wrapper_pcie
         } else {
             puts "ERROR: no top wrapper available for design with PCIe but no FMC. Please implement it."
             return 1
@@ -230,16 +230,53 @@ proc create_root_design { ip_vlnv build_camera build_pcie axis_input_name axis_o
 
         # Create instance: z7_pcie_dma_top
         create_hier_cell_z7_pcie_dma_top [current_bd_instance .] z7_pcie_dma_top
+
+        # Create instance: TPG_VDMA, and set properties
+        set TPG_VDMA [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_vdma:6.2 TPG_VDMA ]
+        set_property -dict [ list \
+                                 CONFIG.c_enable_debug_info_11 {1} \
+                                 CONFIG.c_enable_debug_info_15 {1} \
+                                 CONFIG.c_include_mm2s {1} \
+                                 CONFIG.c_include_mm2s_dre {0} \
+                                 CONFIG.c_include_s2mm_dre {0} \
+                                 CONFIG.c_include_s2mm_sf {0} \
+                                 CONFIG.c_m_axis_mm2s_tdata_width {64} \
+                                 CONFIG.c_mm2s_genlock_mode {3} \
+                                 CONFIG.c_mm2s_linebuffer_depth {4096} \
+                                 CONFIG.c_mm2s_max_burst_length {16} \
+                                 CONFIG.c_num_fstores {1} \
+                                 CONFIG.c_s2mm_genlock_mode {2} \
+                                 CONFIG.c_s2mm_linebuffer_depth {4096} \
+                                 CONFIG.c_s2mm_max_burst_length {16} \
+                                 CONFIG.c_s2mm_sof_enable {1} \
+                                 CONFIG.c_use_mm2s_fsync {1} \
+                                ] $TPG_VDMA
+
+        # Create other instances
         create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 led_const_one
         set_property -dict [list CONFIG.CONST_WIDTH {2} CONFIG.CONST_VAL {3}] [get_bd_cells led_const_one]
         create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 led_concat
 
+        # PS add AXI_HP2 port
+        set_property -dict [list CONFIG.PCW_USE_S_AXI_HP2 {1}] [get_bd_cells processing_system7_0]
+
+        # Add two more interrupt signal ports
+        set_property -dict [list CONFIG.NUM_PORTS {4}] [get_bd_cells interrupt_concat]
+
         # Create interface connections
         connect_bd_intf_net [get_bd_intf_ports EXT_PCIE] [get_bd_intf_pins z7_pcie_dma_top/pcie_7x_mgt]
+        connect_bd_intf_net [get_bd_intf_pins TPG_VDMA/M_AXIS_MM2S] -boundary_type upper [get_bd_intf_pins z7_pcie_dma_top/S_AXIS]
+        connect_bd_intf_net [get_bd_intf_pins TPG_VDMA/S_AXIS_S2MM] -boundary_type upper [get_bd_intf_pins z7_pcie_dma_top/axi_str_s2c0_vdma]
 
         # Create port connections
+        connect_bd_net [get_bd_pins TPG_VDMA/mm2s_introut] [get_bd_pins interrupt_concat/In2]
+        connect_bd_net [get_bd_pins TPG_VDMA/s2mm_introut] [get_bd_pins interrupt_concat/In3]
+        connect_bd_net [get_bd_pins z7_pcie_dma_top/video_clk] [get_bd_pins processing_system7_0/FCLK_CLK1]
+        connect_bd_net [get_bd_pins TPG_VDMA/m_axis_mm2s_aclk] [get_bd_pins processing_system7_0/FCLK_CLK1]
+        connect_bd_net [get_bd_pins TPG_VDMA/s_axis_s2mm_aclk] [get_bd_pins processing_system7_0/FCLK_CLK1]
         connect_bd_net [get_bd_ports EXT_SYS_RST] [get_bd_pins z7_pcie_dma_top/perst_n]
         connect_bd_net [get_bd_ports EXT_PCIE_REFCLK] [get_bd_pins z7_pcie_dma_top/sys_clk]
+        connect_bd_net [get_bd_pins TPG_VDMA/s2mm_fsync_out] [get_bd_pins TPG_VDMA/mm2s_fsync]
         connect_bd_net [get_bd_ports EXT_LEDS] [get_bd_pins led_concat/dout]
         connect_bd_net [get_bd_pins z7_pcie_dma_top/led] [get_bd_pins led_concat/In1]
         connect_bd_net [get_bd_pins led_const_one/dout] [get_bd_pins led_concat/In0]
@@ -251,12 +288,21 @@ proc create_root_design { ip_vlnv build_camera build_pcie axis_input_name axis_o
         delete_bd_objs [get_bd_nets z7_pcie_dma_top/pcie_7x_0_user_reset_out]
         delete_bd_objs [get_bd_pins z7_pcie_dma_top/user_reset_out]
         connect_bd_net [get_bd_pins z7_pcie_dma_top/user_reset_n] [get_bd_pins processing_system7_0_axi_periph/M06_ARESETN] -boundary_type upper
+        apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/processing_system7_0/M_AXI_GP0" Clk "/processing_system7_0/FCLK_CLK0 (100 MHz)" }  [get_bd_intf_pins TPG_VDMA/S_AXI_LITE]
+
+
+        # Connect VDMA AXI MM interfaces to PS AXI_HP2
+        apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/TPG_VDMA/M_AXI_MM2S" Clk "/processing_system7_0/FCLK_CLK1 (142 MHz)" }  [get_bd_intf_pins processing_system7_0/S_AXI_HP2]
+        apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Slave "/processing_system7_0/S_AXI_HP2" Clk "/processing_system7_0/FCLK_CLK1 (142 MHz)" }  [get_bd_intf_pins TPG_VDMA/M_AXI_S2MM]
+
     }
 
     # Set address segments
     if { $build_pcie } {
-        create_bd_addr_seg -range 0x1000 -offset 0x40020000 [get_bd_addr_spaces z7_pcie_dma_top/NWL_AXI_DMA_0/t] [get_bd_addr_segs z7_pcie_dma_top/axi_shim_0/t/reg0] SEG_axi_shim_0_reg0
+        set_property range 64K [get_bd_addr_segs {z7_pcie_dma_top/NWL_AXI_DMA_0/t/SEG_axi_shim_0_reg0}]
+        set_property offset 0x40020000 [get_bd_addr_segs {z7_pcie_dma_top/NWL_AXI_DMA_0/t/SEG_axi_shim_0_reg0}]
         set_property offset 0x40020000 [get_bd_addr_segs {processing_system7_0/Data/SEG_user_registers_slave_0_Reg}]
+        set_property offset 0x40090000 [get_bd_addr_segs {processing_system7_0/Data/SEG_TPG_VDMA_Reg}]
     }
     if { $build_camera } {
         set_property offset 0x43000000 [get_bd_addr_segs {processing_system7_0/Data/SEG_axi_vdma_0_Reg}]
@@ -988,4 +1034,5 @@ puts "Script loaded.  Create a design using"
 puts "  mkproject PROJECT_NAME PROJECT_PATH IP_PATH BUILD_CAMERA BUILD_PCIE"
 puts "e.g. mkproject my_proj my_work /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 1"
 
-mkproject mmp_proj mmp_work_dir /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 1
+mkproject mmp_fmc_proj mmp_fmc_dir /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 0
+#mkproject mmp_fmc_pcie_proj mmp_fmc_pcie_dir /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 1
