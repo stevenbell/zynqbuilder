@@ -120,12 +120,19 @@ proc create_root_design { ip_vlnv build_camera build_pcie axis_input_name axis_o
 
     # Create instance: processing_system7_0, and set properties
     set processing_system7_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0 ]
+
+    # Set the parameters for the system
+    # We can't install a proper preset, so we load the settings locally
+    source build_preset_7z100.tcl
+    set_property -dict $7z100preset $processing_system7_0
+
+    # Set user parameters
     set_property -dict [ list \
                              CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {100} \
                              CONFIG.PCW_IRQ_F2P_INTR {1} \
                              CONFIG.PCW_USE_FABRIC_INTERRUPT {1} \
-                             #CONFIG.PCW_USE_S_AXI_HP1 {1} \
-                             CONFIG.PCW_USE_S_AXI_ACP {1} CONFIG.PCW_USE_DEFAULT_ACP_USER_VAL {1} \
+                             CONFIG.PCW_USE_S_AXI_ACP {1} \
+                             CONFIG.PCW_USE_DEFAULT_ACP_USER_VAL {1} \
                              CONFIG.PCW_QSPI_PERIPHERAL_ENABLE {1} \
                              CONFIG.PCW_QSPI_GRP_SINGLE_SS_ENABLE {0} \
                              CONFIG.PCW_QSPI_GRP_IO1_ENABLE {1} \
@@ -1034,5 +1041,5 @@ puts "Script loaded.  Create a design using"
 puts "  mkproject PROJECT_NAME PROJECT_PATH IP_PATH BUILD_CAMERA BUILD_PCIE"
 puts "e.g. mkproject my_proj my_work /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 1"
 
-mkproject mmp_fmc_proj mmp_fmc_dir /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 0
+#mkproject mmp_fmc_proj mmp_fmc_dir /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 0
 #mkproject mmp_fmc_pcie_proj mmp_fmc_pcie_dir /nobackup/jingpu/Halide-HLS/apps/hls_examples/demosaic_harris_hls/hls_prj/solution1/impl/ip 1 1

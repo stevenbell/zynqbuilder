@@ -1,0 +1,1 @@
+This mirrors the structure of the zc702 project so that the build script works the same without knowing any details.  It wasn't built directly with XSDK, though, so it's missing the .cproject and other Eclipse files.

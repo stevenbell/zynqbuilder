@@ -6,9 +6,20 @@ import yaml
 import mako.template
 import mako.exceptions
 import time
+from sys import argv
 from IPython import embed
 
-paramFile = "../../hwconfig.yml"
+if len(argv) is not 3:
+  print "USAGE: dtgen.py HWCONFIG BASEDIR"
+  print "  HWCONFIG is the path to a YAML hardware configuration file"
+  print "  BASEDIR is the path to a directory with the template file"
+  exit()
+
+if not argv[1].endswith('.yml'):
+  print "hw config file doesn't end with .yml - is this a mistake?"
+
+paramFile = argv[1]
+basepath = argv[2]
 templateFiles = {"devicetree.dts.mako":"devicetree.dts"}
 
 params = yaml.load(open(paramFile))
@@ -28,7 +39,7 @@ for name in params['outstreams'].keys():
   params['irqlist'].append(params['outstreams'][name]['irq'])
 
 for f in templateFiles:
-  src = open(f).read()
+  src = open(basepath + '/' + f).read()
   try:
     template = mako.template.Template(src)
     output = open(templateFiles[f], 'w')
