@@ -11,10 +11,10 @@ typedef struct BufferSet {
   int id;
   // Each input/output stream is allocated separately and shuffled around
   // We have full copies since pointers we're handed may not persist
-% for s in dict(instreams.items() + outstreams.items()):
-  Buffer ${s};
-  unsigned long* ${s}_sg; // Memory for SG table
-  unsigned long ${s}_sg_phys; // Physical address of SG table
+% for s in streams:
+  Buffer ${s['name']};
+  unsigned long* ${s['name']}_sg; // Memory for SG table
+  unsigned long ${s['name']}_sg_phys; // Physical address of SG table
 % endfor
   // TODO: what if the tap width is zero?
   //unsigned char tap_vals[$//{tapwidth}]; // Data that describes the tap state

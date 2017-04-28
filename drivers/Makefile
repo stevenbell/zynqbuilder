@@ -1,6 +1,8 @@
 ARCH := arm
-KER_DIR := /nobackup/sebell/share/linux-xlnx/
+KER_DIR := /home/steven/work/linux-xlnx/
 #KER_DIR := /cad/xilinx/linux-xlnx/
+
+HWCONFIG := ../hwconfig.yml
 
 # There are three modules created from this source code
 #   cmabuffer - Provides access to large contiguous memory buffers from Linux CMA
@@ -30,10 +32,10 @@ cleanall:
 	make ARCH=$(ARCH) -C $(KER_DIR) M=$(PWD) clean
 	rm driver.c
 
-driver.c: driver.c.mako ../hwconfig.yml
-	python drivergen.py
+driver.c: driver.c.mako $(HWCONFIG)
+	python ../parameterize.py $(HWCONFIG) driver.c.mako:driver.c
 
-dma_bufferset.h: dma_bufferset.h.mako
-	python drivergen.py
+dma_bufferset.h: dma_bufferset.h.mako $(HWCONFIG)
+	python ../parameterize.py $(HWCONFIG) dma_bufferset.h.mako:dma_bufferset.h
 
 

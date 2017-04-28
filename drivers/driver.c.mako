@@ -42,23 +42,19 @@ MODULE_LICENSE("GPL");
 #define DEVNAME "hwacc0" // Shows up in /dev
 
 // Memory mappings for the peripherals
-% for s in instreams:
-#define ${s.upper()}_DMA_CONTROLLER_BASE ${instreams[s]['dma_addr']}
-#define ${s.upper()}_DMA_CONTROLLER_SIZE 0x30
-% endfor
-% for s in outstreams:
-#define ${s.upper()}_DMA_CONTROLLER_BASE ${outstreams[s]['dma_addr']}
-#define ${s.upper()}_DMA_CONTROLLER_SIZE 0x30
+% for s in streams:
+#define ${s['name'].upper()}_DMA_CONTROLLER_BASE ${s['dma_addr']}
+#define ${s['name'].upper()}_DMA_CONTROLLER_SIZE 0x30
 % endfor
 
 #define ACC_CONTROLLER_BASE ${baseaddr}
 #define ACC_CONTROLLER_SIZE ${regwidth}
-#define ACC_CONTROLLER_PAGES ${(int(regwidth, 0) / 1024) + 1}
+#define ACC_CONTROLLER_PAGES ${(regwidth / 1024) + 1}
 
 // Hardware address pointers from ioremap
 // We do byte-wise pointer arithmetic on these, so use uchar
-% for s in streamNames:
-unsigned char* ${s}_dma_controller;
+% for s in streams:
+unsigned char* ${s['name']}_dma_controller;
 % endfor
 unsigned char* acc_controller;
 
@@ -98,13 +94,15 @@ BufferList complete_list;
 
 // Wait queues to pend on the various DMA operations. Things waiting on these
 // are woken up when the interrupt fires.
-% for s in streamNames:
-DECLARE_WAIT_QUEUE_HEAD(wq_${s});
+% for s in streams:
+DECLARE_WAIT_QUEUE_HEAD(wq_${s['name']});
 %endfor
 DECLARE_WAIT_QUEUE_HEAD(processing_finished);
 DECLARE_WAIT_QUEUE_HEAD(buffer_free_queue); // Writes waiting for a free buffer
-% for s in outstreams:
-atomic_t ${s}_finished_count;
+% for s in streams:
+% if s['type'] == 'output':
+atomic_t ${s['name']}_finished_count;
+% endif
 % endfor
 
 // Workqueues which are used to asynchronously configure the DMA engine after
@@ -179,18 +177,20 @@ static int dev_open(struct inode *inode, struct file *file)
   // them on the free list.  The actual data will be attached when needed.
   for(i = 0; i < N_DMA_BUFFERSETS; i++){
     buffer_pool[i].id = i;
-% for s in streamNames:
-    buffer_pool[i].${s}_sg = (unsigned long*) __get_free_pages(GFP_KERNEL, SG_PAGEORDER);
-    if(buffer_pool[i].${s}_sg == NULL){
-      ERROR("Failed to allocate memory for SG table ${s}_sg %d\n", i);
+% for s in streams:
+    buffer_pool[i].${s['name']}_sg = (unsigned long*) __get_free_pages(GFP_KERNEL, SG_PAGEORDER);
+    if(buffer_pool[i].${s['name']}_sg == NULL){
+      ERROR("Failed to allocate memory for SG table ${s['name']}_sg %d\n", i);
     }
 % endfor
 
     DEBUG("enqueing buffer set %d\n", i);
     buffer_enqueue(&free_list, buffer_pool + i);
   }
-% for s in outstreams:
-  atomic_set(&${s}_finished_count, 0); // No buffers finished yet
+% for s in streams:
+% if s['type'] == 'output':
+  atomic_set(&${s['name']}_finished_count, 0); // No buffers finished yet
+% endif
 % endfor
   return(0);
 }
@@ -202,8 +202,8 @@ static int dev_close(struct inode *inode, struct file *file)
   // TODO: Wait until the DMA engine is done, so we don't write to memory after freeing it
 
   for(i = 0; i < N_DMA_BUFFERSETS; i++){
-% for s in streamNames:
-    free_pages((unsigned long)buffer_pool[i].${s}_sg, SG_PAGEORDER);
+% for s in streams:
+    free_pages((unsigned long)buffer_pool[i].${s['name']}_sg, SG_PAGEORDER);
 % endfor
   }
 
@@ -297,16 +297,18 @@ void build_sg_chain_2D(const Buffer buf, unsigned long* sg_ptr_base, unsigned lo
  * and flushes the cache. Then it drops the BufferSet into the
  * queue to be pushed to the stencil path DMA engine as soon as it's free.
  */
-int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
+int process_image(${", ".join(["Buffer* " + s['name'] + "_b" for s in streams])})
 {
   BufferSet* src;
 
-% for s in instreams:
-  if(${s}_b->width != ${instreams[s]['width']} ||
-     ${s}_b->height != ${instreams[s]['height']}){
-    // TODO: also add depth
-    ERROR("Buffer size for ${s} doesn't match hardware!");
+% for s in streams:
+% if s['type'] == 'input':
+  if(${s['name']}_b->width != ${s['width']} ||
+     ${s['name']}_b->height != ${s['height']} ||
+     ${s['name']}_b->depth != ${s['depth']}){
+    ERROR("Buffer size for ${s['name']} doesn't match hardware!");
   }
+% endif
 % endfor
 
   TRACE("process_image: begin\n");
@@ -315,30 +317,32 @@ int process_image(${", ".join(["Buffer* " + s + "_b" for s in streamNames])})
   src = buffer_dequeue(&free_list);
 
   TRACE("process_image: got BufferSet\n");
-% for s in streamNames:
-  src->${s} = *${s}_b;
+% for s in streams:
+  src->${s['name']} = *${s['name']}_b;
 % endfor
 
   // Set up the scatter-gather descriptor chains
-% for s in streamNames:
+% for s in streams:
   if (use_2D_mode)
-    build_sg_chain_2D(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
+    build_sg_chain_2D(src->${s['name']}, src->${s['name']}_sg, &src->${s['name']}_sg_phys);
   else
-    build_sg_chain(src->${s}, src->${s}_sg, &src->${s}_sg_phys);
+    build_sg_chain(src->${s['name']}, src->${s['name']}_sg, &src->${s['name']}_sg_phys);
 % endfor
 
   // Map the buffers for DMA
   // This causes cache flushes for the source buffer(s)
   // The invalidate for the result happens on the unmap
   if (!use_acp) {
-% for s in instreams:
-    dma_map_single(pipe_dev, src->${s}.kern_addr,
-                   src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_TO_DEVICE);
+% for s in streams:
+% if s['type'] == 'input':
+    dma_map_single(pipe_dev, src->${s['name']}.kern_addr,
+                   src->${s['name']}.height * src->${s['name']}.stride * src->${s['name']}.depth, DMA_TO_DEVICE);
+% else:
+    dma_map_single(pipe_dev, src->${s['name']}.kern_addr,
+                   src->${s['name']}.height * src->${s['name']}.stride * src->${s['name']}.depth, DMA_FROM_DEVICE);
+% endif
 % endfor
-% for s in outstreams:
-    //dma_map_single(pipe_dev, src->${s}.kern_addr,
-    //               src->${s}.height * src->${s}.stride * src->${s}.depth, DMA_FROM_DEVICE);
-% endfor
+
     //flush_cache_all(); // flush l1 cache
     //outer_flush_all(); // flush l2 cache, kernel dump "bus error"
     TRACE("process_image: dma_map_single() finished.\n");
@@ -365,28 +369,29 @@ void dma_launch_work(struct work_struct* ws)
 
     // Sleep until all the DMA engines are idle or halted (bits 0 and 1)
     // Write should always be idle first, but do all of them to be safe
-% for s in streamNames:
-    wait_event_interruptible(wq_${s}, (ioread32(${s}_dma_controller + 0x04) & 0x00000003) != 0);
+% for s in streams:
+    wait_event_interruptible(wq_${s['name']}, (ioread32(${s['name']}_dma_controller + 0x04) & 0x00000003) != 0);
 % endfor
 
     // TODO: set taps, LUTs, etc
 
-    TRACE("dma_launch_work: writing DMA registers\n");
     // Kick off the DMA write operations
-% for s in streamNames:
+    TRACE("dma_launch_work: writing DMA registers\n");
 
-    DEBUG("dma_launch_work: sg_phys 0x%lx\n", (unsigned long)buf->${s}_sg_phys);
-    iowrite32(0x00010002, ${s}_dma_controller + 0x00); // Stop, so we can set the head ptr
-    iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x08); // Pointer to the first descriptor
-    iowrite32(0x00011003, ${s}_dma_controller + 0x00); // Run and enable interrupts
+% for s in streams:
+    DEBUG("dma_launch_work: sg_phys 0x%lx\n", (unsigned long)buf->${s['name']}_sg_phys);
+    iowrite32(0x00010002, ${s['name']}_dma_controller + 0x00); // Stop, so we can set the head ptr
+    iowrite32(buf->${s['name']}_sg_phys, ${s['name']}_dma_controller + 0x08); // Pointer to the first descriptor
+    iowrite32(0x00011003, ${s['name']}_dma_controller + 0x00); // Run and enable interrupts
     if (use_2D_mode)
-      iowrite32(buf->${s}_sg_phys, ${s}_dma_controller + 0x10); // 2D mode: Last descriptor, starts transfer
+      iowrite32(buf->${s['name']}_sg_phys, ${s['name']}_dma_controller + 0x10); // 2D mode: Last descriptor, starts transfer
     else
-      iowrite32(buf->${s}_sg_phys + (buf->${s}.height - 1) * SG_DESC_BYTES, ${s}_dma_controller + 0x10); // Last descriptor, starts transfer
-% endfor
+      iowrite32(buf->${s['name']}_sg_phys + (buf->${s['name']}.height - 1) * SG_DESC_BYTES, ${s['name']}_dma_controller + 0x10); // Last descriptor, starts transfer
 
+% endfor
     // Start the stencil engine running
-    iowrite32(0x000000ff, acc_controller + ${registers['run']});
+    // control register [7: auto_restart, --- 3: ap_ready, 2: ap_idle, 1: ap_done, 0: ap_start]
+    iowrite32(0x00000001, acc_controller + ${registers['control']});
     TRACE("dma_launch_work: Transfers started\n");
 
     // Move the buffer to the processing list
@@ -402,34 +407,37 @@ void dma_finished_work(struct work_struct* ws)
   // Check that all of the output DMAs have completed their work
   // TODO: bugs may lurk here if there are multiple outputs and the primary
   // finishes first.
-  while(${" && ".join(["atomic_read(&" + s + "_finished_count) > 0" for s in outstreams])}) {
+  while(${" && ".join(["atomic_read(&" + s['name'] + "_finished_count) > 0" for s in streams if s['type'] == 'output'])}) {
 
     // Decrement the completion count
     // This is the only part of the driver that will decrement these counts,
     // so we can be sure that if they're all >0, we have a frame.
-% for s in outstreams:
-    atomic_dec(&${s}_finished_count);
+% for s in streams:
+% if s['type'] == 'output':
+    atomic_dec(&${s['type']}_finished_count);
+% endif
 % endfor
 
     buf = buffer_dequeue(&processing_list);
     DEBUG("dma_finished_work: buf: %lx\n", (unsigned long)buf);
 
     // Unmap each of the SG buffers
-% for s in streamNames:
-    //dma_unmap_single(pipe_dev, buf->${s}_sg_phys, SG_DESC_BYTES * buf->${s}.height, DMA_TO_DEVICE);
+% for s in streams:
+    //dma_unmap_single(pipe_dev, buf->${s['name']}_sg_phys, SG_DESC_BYTES * buf->${s['name']}.height, DMA_TO_DEVICE);
 % endfor
 
     // Unmap all the input and output buffers (with appropriate direction)
     // For the source buffers, this should do nothing.  For the result buffers,
     // it should cause a cache invalidate.
     if (!use_acp) {
-% for s in instreams:
-      //dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-      //buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_TO_DEVICE);
-% endfor
-% for s in outstreams:
-      //dma_unmap_single(pipe_dev, buf->${s}.phys_addr,
-      //buf->${s}.height * buf->${s}.stride * buf->${s}.depth, DMA_FROM_DEVICE);
+% for s in streams:
+% if s['type'] == 'input':
+      //dma_unmap_single(pipe_dev, buf->${s['name']}.phys_addr,
+      //buf->${s['name']}.height * buf->${s['name']}.stride * buf->${s['name']}.depth, DMA_TO_DEVICE);
+% else:
+      //dma_unmap_single(pipe_dev, buf->${s['name']}.phys_addr,
+      //buf->${s['name']}.height * buf->${s['name']}.stride * buf->${s['name']}.depth, DMA_FROM_DEVICE);
+% endif
 % endfor
     TRACE("dma_finished_work: dma_unmap_single() finished.\n");
     }
@@ -444,32 +452,34 @@ void dma_finished_work(struct work_struct* ws)
 }
 
 // Interrupt handlers for the input DMA engine(s)
-% for s in instreams:
-irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
+% for s in streams:
+% if s['type'] == 'input':
+irqreturn_t dma_${s['name']}_finished_handler(int irq, void* dev_id)
 {
-  iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
-  wake_up_interruptible(&wq_${s});
-  DEBUG("irq: DMA ${s} finished.\n");
+  iowrite32(0x00007000, ${s['name']}_dma_controller + 0x04); // Acknowledge/clear interrupt
+  wake_up_interruptible(&wq_${s['name']});
+  DEBUG("irq: DMA ${s['name']} finished.\n");
   return(IRQ_HANDLED);
 }
+% endif
 % endfor
 
 // The first output DMA engine is responsible for launching the "finished"
 // work task.  It's ok if the transaction isn't complete yet, because the
 // task will wait for all of the engines to complete a frame and increment
 // the semaphore.
-% for s in outstreams:
-irqreturn_t dma_${s}_finished_handler(int irq, void* dev_id)
+% for s in [s for s in streams if s['type'] == 'output']:
+irqreturn_t dma_${s['name']}_finished_handler(int irq, void* dev_id)
 {
-  iowrite32(0x00007000, ${s}_dma_controller + 0x04); // Acknowledge/clear interrupt
-  wake_up_interruptible(&wq_${s}); // The next processing action can now start
-  TRACE("irq: DMA ${s} finished.\n");
+  iowrite32(0x00007000, ${s['name']}_dma_controller + 0x04); // Acknowledge/clear interrupt
+  wake_up_interruptible(&wq_${s['name']}); // The next processing action can now start
+  TRACE("irq: DMA ${s['name']} finished.\n");
 
   // Keep an explicit count of the number of buffers, to cover the rare
   // (hopefully impossible) case where a second buffer finished before the work
   // queue task actually executes.  This would cause dma_finished_work to only
   // execute once, when it was queued twice.
-  atomic_inc(&${s}_finished_count);
+  atomic_inc(&${s['name']}_finished_count);
 
 % if loop.index is 0:
   // Delegate the work of moving the buffer from "PROCESSING" to "FINISHED".
@@ -513,15 +523,15 @@ void pend_processed(int id)
 
 long dev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-  Buffer ${", ".join(["tmp_" + s for s in streamNames])};
+  Buffer ${", ".join(["tmp_" + s['name'] for s in streams])};
 
   DEBUG("ioctl cmd %d | %lu (%lx) \n", cmd, arg, arg);
   switch(cmd){
     case PROCESS_IMAGE:
       TRACE("ioctl: PROCESS_IMAGE\n");
-      if(access_ok(VERIFY_READ, (void*)arg, ${len(streamNames)}*sizeof(Buffer)) &&
-         ${" &&\n         ".join(["copy_from_user(&tmp_" + s + ", (void*)(arg + sizeof(Buffer)*" + str(i) + "), sizeof(Buffer)) == 0" for (i, s) in enumerate(streamNames)])}){
-        return process_image(${", ".join(["&tmp_" + s for s in streamNames])});
+      if(access_ok(VERIFY_READ, (void*)arg, ${len(streams)}*sizeof(Buffer)) &&
+         ${" &&\n         ".join(["copy_from_user(&tmp_" + s['name'] + ", (void*)(arg + sizeof(Buffer)*" + str(i) + "), sizeof(Buffer)) == 0" for (i, s) in enumerate(streams)])}){
+        return process_image(${", ".join(["&tmp_" + s['name'] for s in streams])});
       }
       else{
         return(-EIO); // can't read or copy; more informative error here?
@@ -570,13 +580,13 @@ static int hwacc_probe(struct platform_device *pdev)
 
   // TODO: this is pretty fragile, as it relies on the ordering in the device
   // tree.  It might be better to break them out in the device tree.
-% for n in range(len(streamNames)):
+% for n in range(len(streams)):
   r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, ${n});
   if(r_irq == NULL){
     ERROR("IRQ lookup failed.  Check the device tree.\n");
   }
   TRACE("IRQ number is %d\n", r_irq->start);
-  irqok = request_irq(r_irq->start, dma_${streamNames[n]}_finished_handler, 0, "hwacc ${streamNames[n]}", NULL);
+  irqok = request_irq(r_irq->start, dma_${streams[n]['name']}_finished_handler, 0, "hwacc ${streams[n]['name']}", NULL);
   if(irqok != 0){ return irqok; }
 % endfor
 
@@ -598,20 +608,20 @@ static int hwacc_probe(struct platform_device *pdev)
   pipe_dev = device_create(pipe_class, NULL, device_num, 0, DEVNAME);
 
   // Get pointers to the memory-mapped hardware
-% for s in streamNames:
-  ${s}_dma_controller = ioremap(${s.upper()}_DMA_CONTROLLER_BASE, ${s.upper()}_DMA_CONTROLLER_SIZE);
+% for s in streams:
+  ${s['name']}_dma_controller = ioremap(${s['name'].upper()}_DMA_CONTROLLER_BASE, ${s['name'].upper()}_DMA_CONTROLLER_SIZE);
 % endfor
 
   acc_controller = ioremap(ACC_CONTROLLER_BASE, ACC_CONTROLLER_SIZE);
-  if(${" || ".join([s + "_dma_controller == NULL" for s in streamNames])}
+  if(${" || ".join([s['name'] + "_dma_controller == NULL" for s in streams])}
     || acc_controller == NULL){
     ERROR("ioremap failed for one or more devices!\n");
     return(-ENODEV);
   }
 
-% for s in streamNames:
-  if(check_dma_engine(${s}_dma_controller)){
-    ERROR("DMA engine ${s} is misconfigured or hung!\n");
+% for s in streams:
+  if(check_dma_engine(${s['name']}_dma_controller)){
+    ERROR("DMA engine ${s['name']} is misconfigured or hung!\n");
     return(-ENODEV);
   }
 % endfor
@@ -631,7 +641,7 @@ static int hwacc_remove(struct platform_device *pdev)
   struct resource* r_irq = NULL;
 
   // Release the IRQ lines
-% for n in range(len(streamNames)):
+% for n in range(len(streams)):
   r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, ${n});
   if(r_irq == NULL){
     ERROR("IRQ lookup failed on release.  Check the device tree.\n");
@@ -645,8 +655,8 @@ static int hwacc_remove(struct platform_device *pdev)
   unregister_chrdev_region(device_num, 1);
 
   // Release all the iomapped hardware
-% for s in streamNames:
-  iounmap(${s}_dma_controller);
+% for s in streams:
+  iounmap(${s['name']}_dma_controller);
 % endfor
   iounmap(acc_controller);
   return(0);
