@@ -48,6 +48,9 @@ int main(int argc, char* argv[])
   }
   munmap((void*)data, buf.stride * buf.height * buf.depth);
 
+
+  // Read back the data using CMA
+  printf("Reading back from userspace-mapped CMA pointer:\n");
   data = (long*) mmap(NULL, buf.stride * buf.height * buf.depth,
                             PROT_READ, MAP_SHARED, cma, buf.mmap_offset);
   if(data == MAP_FAILED){
@@ -64,6 +67,23 @@ int main(int argc, char* argv[])
   munmap((void*)data, buf.stride * buf.height * buf.depth);
 
 
+  // Read back the data using mmap on /dev/mem
+  printf("Reading back from physical address using /dev/mem:\n");
+  int mem = open("/dev/mem", O_RDONLY);
+  long* rawdata = (long*) mmap(NULL, buf.stride * buf.height * buf.depth,
+                            PROT_READ, MAP_SHARED, mem, buf.phys_addr);
+  if(rawdata == MAP_FAILED){
+    printf("readback mmap on /dev/mem failed!\n");
+    return(0);
+  }
+
+  for(int i = 0; i < 10; i++){
+    for(int j = 0; j < 10; j++){
+      printf("%lx, ", rawdata[i * buf.stride + j]);
+    }
+    printf("\n");
+  }
+  munmap((void*)rawdata, buf.stride * buf.height * buf.depth);
 
   ok = ioctl(cma, FREE_IMAGE, (long unsigned int)&buf);
 
