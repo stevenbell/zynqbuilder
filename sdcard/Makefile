@@ -1,7 +1,7 @@
 # These parameters are defaults and should usually be overriden, e.g.,
 #   make SDCARD_DIR=/YOUR/PATH/HERE copy
 SDCARD_DIR=/media/steven/2E9F-3602
-PROJECT_DIR=/data/work/zynqbuilder/vivado_project/canny2
+PROJECT_DIR=/data/work/zynqbuilder/vivado_project/canny_mmp
 
 # Platform is either zc702 (Xilinx dev board) or 7z100 (Avnet MMP)
 PLATFORM=7z100

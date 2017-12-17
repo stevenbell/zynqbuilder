@@ -466,7 +466,7 @@
 		hwacc@43c10000 {
 			compatible = "hwacc";
 			reg = <0x43c10000 0x100>;
-			interrupts = ${', '.join(['<0 %d 4>' % (irq-32) for irq in irqlist])};
+			interrupts = ${', '.join(['<0 %d 4>' % (stream['irq']-32) for stream in streams])};
 			interrupt-parent = <0x3>;
 		};
 

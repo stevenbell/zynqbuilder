@@ -13,6 +13,12 @@ grabimage: grabimage.cpp
 grabprocess: grabprocess.cpp
 	$(CROSS_COMPILE)g++ -g -I ../drivers/ grabprocess.cpp -o grabprocess
 
+testhw.cpp: testhw.cpp.mako ../hwconfig.yml
+	python ../parameterize.py ../hwconfig.yml testhw.cpp.mako:testhw.cpp
+
+testhw: testhw.cpp
+	$(CROSS_COMPILE)g++ -g -I ../drivers/ testhw.cpp -o testhw
+
 clean:
-	rm twoinput testcma grabimage grabprocess
+	rm twoinput testcma grabimage grabprocess testhw.cpp testhw
 
