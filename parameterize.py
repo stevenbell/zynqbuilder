@@ -13,7 +13,7 @@ from sys import argv
 from IPython import embed
 
 if len(argv) < 3:
-  print "USAGE: dtgen.py HWCONFIG SRCFILE:DSTFILE [ADDITIONAL:FILES]"
+  print "USAGE: parameterize.py HWCONFIG SRCFILE:DSTFILE [ADDITIONAL:FILES]"
   print "  HWCONFIG is the path to a YAML hardware configuration file"
   print "  SRCFILE is a template source file, typically named the same as the"
   print "  target output file, plus the extension '.mako'"
